@@ -1,0 +1,43 @@
+meta {
+  name: OAuth2 Request
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/protected
+  body: none
+  auth: oauth2
+}
+
+auth:oauth2 {
+  grant_type: authorization_code
+  callback_url: http://127.0.0.1:53682/callback
+  authorization_url: https://example.com/authorize
+  access_token_url: https://example.com/token
+  refresh_token_url: https://example.com/token
+  client_id: client-id
+  client_secret: client-secret
+  scope: read write
+  state: fixed-state
+  pkce: true
+  credentials_placement: body
+  credentials_id: credentials-id
+  token_source: access_token
+  token_placement: header
+  token_header_prefix: Bearer
+  auto_fetch_token: true
+  auto_refresh_token: true
+}
+
+auth:oauth2:additional_params:auth_req:queryparams {
+  audience: api
+}
+
+auth:oauth2:additional_params:access_token_req:body {
+  resource: resource-1
+}
+
+auth:oauth2:additional_params:refresh_token_req:body {
+  resource: resource-1
+}

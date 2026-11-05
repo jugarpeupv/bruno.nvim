@@ -1,0 +1,382 @@
+*bruno.txt*  Run Bruno collections from Neovim
+
+==============================================================================
+CONTENTS                                                    *bruno-contents*
+
+  1. Introduction ................................ |bruno-introduction|
+  2. Setup ....................................... |bruno-setup|
+  3. Detection and environments .................. |bruno-detection|
+  4. Commands .................................... |bruno-commands|
+  5. Workbench ................................... |bruno-workbench|
+  6. OAuth2 ...................................... |bruno-oauth2|
+  7. API ......................................... |bruno-api|
+  8. Events ...................................... |bruno-events|
+
+==============================================================================
+1. INTRODUCTION                                         *bruno-introduction*
+
+bruno.nvim runs `.bru` and OpenCollection `.yml` requests with the official
+Bruno CLI (`bru run`) and displays the result in a tabbed workbench buffer.
+
+It also implements OAuth2 flows that the CLI does not support yet, including
+authorization code with PKCE and a loopback callback server.
+
+==============================================================================
+2. SETUP                                                       *bruno-setup*
+
+Requirements:
+  - Neovim 0.10 or newer
+  - Bruno CLI 4.x (`npm install -g @usebruno/cli`)
+  - curl (for OAuth2 token requests)
+
+Minimal setup: >lua
+  require('bruno').setup({})
+<
+No collection path is needed: collections are detected from the current working
+directory. See |bruno-detection|.
+
+See |bruno-config| for every option.
+
+                                                        *bruno-config*
+Configuration defaults: >lua
+  {
+    cli = 'bru',
+    default_env = nil,
+    cli_args = {},
+    timeout = 0,
+    notify = true,
+    log_level = 'warn',
+    ui = {
+      split = 'right',          -- right | left | bottom (adjacent split)
+      width = 0.45,
+      height = 0.35,
+      auto_open = true,
+      default_tab = 'request',
+      tabs = { 'request', 'body', 'headers', 'tests', 'scripts', 'timeline', 'raw', 'verbose' },
+      keymaps = {
+        next_tab = '<Tab>', prev_tab = '<S-Tab>',
+        next_request = '}', prev_request = '{',
+        next_response = ')', prev_response = '(',
+        tab_1 = '1', tab_2 = '2', tab_3 = '3',
+        tab_4 = '4', tab_5 = '5', tab_6 = '6',
+        tab_7 = '7', tab_8 = '8',
+        run = 'R', replay = 'r', edit_source = 'e',
+        env = 'ge', requests = 'p',
+        auth = 'a', auth_clear = 'A',
+        copy_curl = 'c', yank_body = 'y', yank_raw = 'Y',
+        help = '?', close = 'q', hover = 'K', select_tab = '<CR>',
+      },
+    },
+    oauth2 = {
+      enabled = true,
+      cache = true,
+      open_browser = true,
+      browser_cmd = nil,
+      callback_timeout = 120000,
+      default_callback_url = 'http://127.0.0.1:53682/callback',
+      token_timeout = 30000,
+      refresh_leeway = 60,
+    },
+  }
+<
+Set a keymap value to `false` to disable it.
+
+When `default_env` is unset and a detected collection has exactly one
+environment, that environment is selected automatically. See
+|bruno-detection|.
+
+==============================================================================
+3. DETECTION AND ENVIRONMENTS                               *bruno-detection*
+
+Collection detection uses the current working directory and needs no
+configuration:
+
+  1. If `cwd` is inside a collection, the nearest ancestor containing
+     `bruno.json` or `opencollection.yml` is used.
+  2. Otherwise the directory is scanned recursively (breadth-first) for
+     collection roots. Dependency/build folders and hidden directories are
+     skipped.
+  3. The result is cached per `cwd`.
+
+                                                                *:BrunoDetect*
+:BrunoDetect
+        Print the detected directory, collection name, format, environments
+        and selected environment.
+
+:BrunoDetect!
+        Clear the `cwd` detection cache and scan again. Use this after
+        creating, moving or deleting a collection.           *:BrunoDetect!*
+
+The request list used by `}` / `{` is refreshed by |:BrunoDetect!| and by
+|:BrunoRequests|.
+
+Environment selection order:
+
+  1. An environment selected explicitly with |:BrunoEnv| or the picker.
+  2. `default_env`, when set and present in the collection.
+  3. The only environment of the collection, when exactly one exists. The
+     selection is printed automatically.
+
+The selected environment is shown in the workbench metadata line, for example
+`Request: 2/3 · Selected env: dev`, and in the Request tab.
+
+Statusline integration: >lua
+  require('bruno').current_environment()  -- "local" or nil
+  require('bruno').current_collection()   -- collection table or nil
+  require('bruno').status()               -- { collection, root, environment }
+<
+
+==============================================================================
+4. COMMANDS                                                 *bruno-commands*
+
+:Bruno                                                       *:Bruno*
+:BrunoOpen                                                   *:BrunoOpen*
+        Open the workbench for the current or last request.
+
+:BrunoToggle                                               *:BrunoToggle*
+        Focus the workbench when it is visible but not focused, close it when
+        it is focused, or open it when it is not displayed.
+
+:BrunoRun [file]                                             *:BrunoRun*
+        Run the current request, or the request in {file}.
+
+:BrunoReplay                                               *:BrunoReplay*
+        Re-run the last request.
+
+:BrunoCancel                                               *:BrunoCancel*
+        Kill the running `bru` process.
+
+:BrunoEnv [name]                                             *:BrunoEnv*
+        Select an environment, or switch directly to {name}.
+
+:BrunoRequests                                           *:BrunoRequests*
+        Pick a request from the detected collection(s).
+
+:BrunoSearch                                               *:BrunoSearch*
+        Compatibility alias for |:BrunoRequests|.
+
+:BrunoInspect                                             *:BrunoInspect*
+        Open the workbench on the Request tab.
+
+:BrunoToggleView                                       *:BrunoToggleView*
+        Cycle the workbench tabs.
+
+:BrunoStats                                                 *:BrunoStats*
+        Open the workbench on the Timeline tab.
+
+:BrunoAuth [login|clear|status]                              *:BrunoAuth*
+        Acquire (`login`), clear or inspect the OAuth2 token for the current
+        request.
+
+:BrunoAuthClear                                         *:BrunoAuthClear*
+        Clear the cached OAuth2 token.
+
+:BrunoAuthStatus                                       *:BrunoAuthStatus*
+        Show the cached OAuth2 status.
+
+:BrunoCopy                                                   *:BrunoCopy*
+:BrunoCopyCurl                                           *:BrunoCopyCurl*
+        Copy the current request as a cURL command.
+
+:BrunoTab [name|index]                                       *:BrunoTab*
+        Select a workbench tab. Without an argument, use a picker.
+
+:BrunoClose                                                 *:BrunoClose*
+        Close the workbench window.
+
+==============================================================================
+5. WORKBENCH                                               *bruno-workbench*
+
+The workbench is a single nofile buffer with this top area:
+
+  Request  Body  Headers  Tests  Scripts  Timeline  Raw  [Verbose]
+  GET  http://127.0.0.1:8765/archetypes  ·  200 OK  ·  1498 ms  ·  15.7 KiB
+  Request: 2/3 · Selected env: dev
+
+The URL is resolved with the selected environment. The third line shows the
+execution history position followed by the selected environment. The winbar is
+left empty. Manually opening the workbench shows `Request: 1/1`; every run
+(including replay) appends a new entry and selects it (`2/2`, `3/3`, …). When
+`auto_open` opens the workbench for the first run, no extra placeholder is
+added, so that first run is `1/1`. `(` / `)` move back and forward through
+previous executions without running anything. `{` / `}` change the request
+loaded from the collection.
+
+Below it is one pane per tab:
+
+  Request   Method, URL, headers, params, body, scripts, tests and docs.
+  Body      Response status and body in a fenced code block.
+  Headers   Request and response headers.
+  Tests     Bruno test and assertion results.
+  Scripts   Pre-request, after-response and tests scripts with their output.
+  Timeline  Status, timing, size and the CLI summary.
+  Raw       Raw JSON emitted by the Bruno CLI, wrapped in a fenced JSON block.
+  Verbose   Executed `bru run` command plus raw CLI stdout/stderr.
+  Logs      Optional: in-memory bruno.nvim logs, when added to `ui.tabs`.
+
+With `ui.split = 'right'` (the default) the workbench opens as a normal
+vertical split adjacent to the current window, not pinned to the far right.
+
+The buffer keeps `filetype=bruno_ui`, but it is treated as Markdown:
+Treesitter maps `bruno_ui` to the `markdown` parser, Markdown syntax is used as
+fallback, and the `render-markdown.nvim` integration adds `bruno_ui` to its
+filetypes automatically. `:RenderMarkdown toggle` works in the workbench, including when
+render-markdown is lazy-loaded. Sections are Markdown headings (`## ...`); use
+`za` on a heading to fold its section.
+
+Press `K` with the cursor over a `{{VARIABLE}}` to show its resolved value in a
+floating window. Press `K` again to focus the hover window; `q`, `Esc` or `K`
+inside it closes it.
+
+Default buffer-local keymaps: >text
+  <Tab> / <S-Tab>   next / previous tab
+  ) / (             next / previous execution in history
+  } / {             next / previous request in collection
+  <CR>              open tab under cursor (on tab bar)
+  1 .. 8            select a tab
+  R                 run request
+  r                 replay last request
+  e                 edit request source
+  ge                select environment
+  p                 pick request
+  a                 acquire OAuth2 token
+  A                 clear OAuth2 token
+  c                 copy as cURL
+  y                 yank response body
+  Y                 yank raw result
+  K                 inspect {{variable}} under cursor
+  ? or g?           help
+  q                 close workbench
+<
+The plugin exposes these mappings for your own configuration:
+  <Plug>(bruno-run)
+  <Plug>(bruno-open)
+  <Plug>(bruno-requests)
+
+==============================================================================
+6. OAUTH2                                                     *bruno-oauth2*
+
+The plugin detects `auth:oauth2` in `.bru` requests and `type: oauth2` in
+OpenCollection `.yml` requests, including auth inherited from folders and the
+collection root.
+
+Supported grants:
+  authorization_code (with PKCE S256)  ~
+  implicit                             ~
+  client_credentials                   ~
+  password                             ~
+
+Device Authorization is not implemented yet.
+
+For authorization-code and implicit flows, the callback URL must be an
+`http://127.0.0.1:...` or `http://localhost:...` URL to use the built-in
+loopback server. Register that exact URL in your OAuth2 provider. If the URL is
+not a loopback HTTP URL (or the port cannot be bound), the browser is opened
+and you are asked to paste the final redirected URL.
+
+Tokens are cached at:
+  `stdpath('cache')/bruno.nvim/oauth2.json` (mode 0600)
+
+The original request file is never modified. A temporary sibling file with the
+token injected as an `Authorization` header (or query parameter) is executed
+and deleted after the CLI exits.
+
+Examples:
+
+`.bru`: >bru
+  auth:oauth2 {
+    grant_type: authorization_code
+    callback_url: http://127.0.0.1:53682/callback
+    authorization_url: https://id.example.com/authorize
+    access_token_url: https://id.example.com/token
+    refresh_token_url: https://id.example.com/token
+    client_id: {{clientId}}
+    client_secret: {{clientSecret}}
+    scope: openid profile
+    pkce: true
+    credentials_placement: body
+    credentials_id: my-provider
+    token_placement: header
+    token_header_prefix: Bearer
+    auto_fetch_token: true
+    auto_refresh_token: true
+  }
+<
+
+`.yml`: >yaml
+  http:
+    auth:
+      type: oauth2
+      flow: authorization_code
+      authorizationUrl: https://id.example.com/authorize
+      accessTokenUrl: https://id.example.com/token
+      refreshTokenUrl: https://id.example.com/token
+      callbackUrl: http://127.0.0.1:53682/callback
+      credentials:
+        clientId: "{{clientId}}"
+        clientSecret: "{{clientSecret}}"
+        placement: body
+      scope: openid profile
+      pkce: {}
+      tokenConfig:
+        id: my-provider
+        source: access_token
+        placement:
+          header: Bearer
+      settings:
+        autoFetchToken: true
+        autoRefreshToken: true
+<
+
+==============================================================================
+7. API                                                           *bruno-api*
+
+>lua
+  local bruno = require('bruno')
+
+  bruno.open({ request = bruno.current_request() })
+  bruno.run()                   -- current request
+  bruno.run('/path/to/x.bru')   -- explicit file
+  bruno.replay()
+  bruno.cancel()
+  bruno.toggle()
+  bruno.next_request()
+  bruno.prev_request()
+  bruno.next_response()
+  bruno.prev_response()
+  bruno.env('Local')
+  bruno.pick_request()
+  bruno.auth()
+  bruno.auth_clear()
+  bruno.auth_status()
+  bruno.copy_curl()
+  bruno.tab('headers')
+
+  -- Detection and environment integration.
+  bruno.detect_collection()     -- cached detection for cwd
+  bruno.refresh_detection()     -- force a fresh scan
+  bruno.current_collection()
+  bruno.current_environment()
+  bruno.get_env()               -- alias
+  bruno.status()
+<
+Use |:checkhealth| `bruno` to verify the CLI, curl and the cache directory.
+
+==============================================================================
+8. EVENTS                                                     *bruno-events*
+
+  User BrunoRequestStarted    data: request, command
+  User BrunoRequestFinished   data: request, result or error
+  User BrunoAuthStarted       data: grant_type
+  User BrunoAuthFinished      data: token or error
+
+Example: >lua
+  vim.api.nvim_create_autocmd('User', {
+    pattern = 'BrunoRequestFinished',
+    callback = function(event)
+      print(vim.inspect(event.data.result))
+    end,
+  })
+<
+
+vim:tw=78:ts=8:noet:ft=help:norl:

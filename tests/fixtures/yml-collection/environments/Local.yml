@@ -1,0 +1,9 @@
+name: Local
+variables:
+  - name: baseUrl
+    value: http://127.0.0.1:8765
+  - name: token
+    value: env-token
+  - name: apiKey
+    value: ""
+    secret: true

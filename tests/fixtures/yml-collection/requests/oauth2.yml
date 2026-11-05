@@ -1,0 +1,42 @@
+info:
+  name: OAuth2 YAML Request
+  type: http
+  seq: 2
+http:
+  method: GET
+  url: "{{baseUrl}}/protected"
+  auth:
+    type: oauth2
+    flow: authorization_code
+    authorizationUrl: https://example.com/authorize
+    accessTokenUrl: https://example.com/token
+    refreshTokenUrl: https://example.com/token
+    callbackUrl: http://127.0.0.1:53682/callback
+    credentials:
+      clientId: client-id
+      clientSecret: client-secret
+      placement: body
+    scope: read write
+    state: fixed-state
+    pkce: {}
+    additionalParameters:
+      authorizationRequest:
+        - name: audience
+          value: api
+          placement: query
+      accessTokenRequest:
+        - name: resource
+          value: resource-1
+          placement: body
+      refreshTokenRequest:
+        - name: resource
+          value: resource-1
+          placement: body
+    tokenConfig:
+      id: credentials-id
+      source: access_token
+      placement:
+        header: Bearer
+    settings:
+      autoFetchToken: true
+      autoRefreshToken: true

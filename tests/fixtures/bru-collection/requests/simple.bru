@@ -1,0 +1,74 @@
+meta {
+  name: Simple Request
+  type: http
+  seq: 1
+  tags: [
+    smoke
+    api
+  ]
+}
+
+post {
+  url: {{baseUrl}}/users/:id?foo=bar
+  body: json
+  auth: bearer
+}
+
+params:query {
+  search: hello
+  ~disabled: nope
+  "key with spaces": value
+}
+
+params:path {
+  id: 42
+}
+
+headers {
+  Content-Type: application/json
+  ~X-Disabled: no
+  Accept: application/json
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "hello": "world",
+    "nested": {
+      "ok": true
+    }
+  }
+}
+
+script:pre-request {
+  bru.setVar('x', 1);
+}
+
+script:post-response {
+  console.log(res.status);
+}
+
+tests {
+  test('ok', function() {
+    expect(res.status).to.equal(200);
+  });
+}
+
+docs {
+  Simple request documentation.
+}
+
+vars:pre-request {
+  requestVar: value
+}
+
+vars:post-response {
+  responseVar: res.body.id
+}
+
+assert {
+  res.status: eq 200
+}

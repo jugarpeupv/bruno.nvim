@@ -1,0 +1,11 @@
+{
+  "$schema": "https://raw.githubusercontent.com/LuaLS/vscode-lua/master/setting/schema.json",
+  "runtime.version": "LuaJIT",
+  "runtime.path": ["lua/?.lua", "lua/?/init.lua"],
+  "workspace.checkThirdParty": false,
+  "workspace.library": ["$VIMRUNTIME"],
+  "workspace.ignoreDir": ["tests"],
+  "diagnostics.globals": ["vim"],
+  "diagnostics.disable": ["missing-fields"],
+  "type.weakUnionCheck": true
+}

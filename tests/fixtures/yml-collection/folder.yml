@@ -1,0 +1,7 @@
+info:
+  name: Root
+  type: folder
+request:
+  auth:
+    type: bearer
+    token: folder-token

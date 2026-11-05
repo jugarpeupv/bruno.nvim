@@ -1,0 +1,53 @@
+info:
+  name: Simple YAML Request
+  type: http
+  seq: 1
+http:
+  method: POST
+  url: "{{baseUrl}}/users"
+  headers:
+    - name: Content-Type
+      value: application/json
+    - name: X-Disabled
+      value: nope
+      disabled: true
+  params:
+    - name: search
+      value: hello
+    - name: page
+      value: "1"
+  body:
+    type: json
+    data: |-
+      {
+        "hello": "world",
+        "nested": {
+          "ok": true
+        }
+      }
+  auth:
+    type: bearer
+    token: "{{token}}"
+runtime:
+  variables:
+    - name: requestVar
+      value: value
+  scripts:
+    - type: before-request
+      code: |-
+        bru.setVar('x', 1);
+    - type: after-response
+      code: |-
+        console.log(res.status);
+    - type: tests
+      code: |-
+        test('ok', function() {
+          expect(res.status).to.equal(200);
+        });
+  assertions:
+    - expression: res.status
+      operator: eq
+      value: 200
+docs:
+  content: |
+    Simple YAML request documentation.

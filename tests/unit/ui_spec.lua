@@ -346,6 +346,8 @@ describe('ui.workbench', function()
     ui.show_result(result(201, 2))
     lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
     match(lines[3], 'Request: 3/3')
+    ui.select_tab('body')
+    lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
     match(table.concat(lines, '\n'), '"run": 2')
 
     ui.prev_response()
@@ -432,6 +434,7 @@ describe('ui.workbench', function()
       command = { 'bru', 'run', 'requests/simple.bru', '--env', 'Local' },
     }
 
+    require('bruno.state').env_before = { baseUrl = 'http://127.0.0.1:8765', token = 'old' }
     ui.show_result(result)
     ui.select_tab('scripts')
 
@@ -449,6 +452,12 @@ describe('ui.workbench', function()
     match(text, 'tests pass')
     match(text, '## STDERR')
     match(text, 'POST%-CONSOLE%-WARN')
+
+    match(text, '## ENVIRONMENT VARIABLES')
+    match(text, '```diff')
+    match(text, '%- token = old')
+    match(text, '%+ token = env%-token')
+    match(text, '%+ apiKey')
 
     ui.select_tab('verbose')
     lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
@@ -511,6 +520,109 @@ describe('ui.workbench', function()
 
     lines = vim.api.nvim_buf_get_lines(ui.buf, 0, -1, false)
     match(lines[3], '^Request: 1/1 · Selected env: Local')
+
+    ui.destroy()
+  end)
+
+  it('lands on the configured result_tab when auto-opened for the first run', function()
+    require('bruno').setup({
+      notify = false,
+      default_env = nil,
+      ui = { auto_open = true, result_tab = 'headers' },
+    })
+    require('bruno.state').reset()
+    require('bruno.env').reset()
+
+    local request = parsers.parse_request(root .. '/bru-collection/requests/simple.bru')
+    local ui = require('bruno.ui')
+
+    ui.before_run(request)
+    local bufnr = ui.buf
+    truthy(bufnr)
+    eq('headers', ui.state(bufnr).tab)
+
+    ui.show_result({
+      request = request,
+      raw = '{}',
+      data = {},
+      results = {
+        {
+          name = 'Simple Request',
+          status = 'pass',
+          request = { method = 'POST', url = 'http://127.0.0.1:8765/users', headers = {} },
+          response = {
+            status = 200,
+            statusText = 'OK',
+            headers = {},
+            data = {},
+            responseTime = 1,
+            size = 2,
+          },
+          testResults = {},
+          assertionResults = {},
+        },
+      },
+      summary = {},
+      stdout = '',
+      stderr = '',
+      code = 0,
+      env = 'Local',
+    })
+
+    eq('headers', ui.state(bufnr).tab)
+
+    ui.destroy()
+  end)
+
+  it('keeps the current tab when re-running', function()
+    require('bruno').setup({
+      notify = false,
+      default_env = nil,
+      ui = { auto_open = false },
+    })
+    require('bruno.state').reset()
+    require('bruno.env').reset()
+
+    local request = parsers.parse_request(root .. '/bru-collection/requests/simple.bru')
+    local ui = require('bruno.ui')
+    local bufnr = ui.open({ request = request })
+    truthy(bufnr)
+
+    ui.select_tab('headers')
+    eq('headers', ui.state(bufnr).tab)
+
+    ui.before_run(request)
+    eq('headers', ui.state(bufnr).tab)
+
+    ui.show_result({
+      request = request,
+      raw = '{}',
+      data = {},
+      results = {
+        {
+          name = 'Simple Request',
+          status = 'pass',
+          request = { method = 'POST', url = 'http://127.0.0.1:8765/users', headers = {} },
+          response = {
+            status = 200,
+            statusText = 'OK',
+            headers = {},
+            data = {},
+            responseTime = 1,
+            size = 2,
+          },
+          testResults = {},
+          assertionResults = {},
+        },
+      },
+      summary = {},
+      stdout = '',
+      stderr = '',
+      code = 0,
+      env = 'Local',
+    })
+
+    eq('headers', ui.state(bufnr).tab)
 
     ui.destroy()
   end)

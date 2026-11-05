@@ -244,7 +244,12 @@ end
 ---@return string? err
 function M.listen(opts, handler)
   local host = opts.host or '127.0.0.1'
-  if host ~= '127.0.0.1' and host ~= 'localhost' and host ~= '::1' then
+  if host == 'localhost' then
+    -- libuv's tcp:bind needs a numeric address; the browser still reaches it
+    -- through the `localhost` redirect URI.
+    host = '127.0.0.1'
+  end
+  if host ~= '127.0.0.1' and host ~= '::1' then
     return nil, 'OAuth2 callback server only supports loopback addresses'
   end
 

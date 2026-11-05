@@ -183,6 +183,8 @@
 ---@field code integer
 ---@field env? string
 ---@field command? string[]
+---@field vars_before? table<string, string>
+---@field vars_after? table<string, string>
 
 ---@class bruno.OAuth2Options
 ---@field enabled boolean
@@ -230,6 +232,7 @@
 ---@field height number
 ---@field auto_open boolean
 ---@field default_tab string
+---@field result_tab string
 ---@field tabs string[]
 ---@field keymaps bruno.UIKeymaps
 

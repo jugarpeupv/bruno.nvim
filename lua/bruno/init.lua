@@ -110,6 +110,11 @@ function M.auth_clear()
   require('bruno.ui').auth_clear()
 end
 
+---Remove every cached OAuth2 token.
+function M.clear_tokens()
+  return require('bruno.oauth2').clear()
+end
+
 ---Print OAuth2 status for the current request.
 function M.auth_status()
   local request = current_request()
@@ -263,7 +268,6 @@ function M.setup(opts)
 
   require('bruno.ui').setup()
   pcall(vim.treesitter.language.register, 'markdown', 'bruno_ui')
-  require('bruno.integrations.render_markdown').setup()
 
   vim.filetype.add({
     extension = {
@@ -368,6 +372,11 @@ function M.setup(opts)
   command('BrunoAuthClear', function()
     M.auth_clear()
   end, { desc = 'Bruno: clear cached OAuth2 token' })
+
+  command('BrunoClearTokens', function()
+    M.clear_tokens()
+    log.notify('Bruno: OAuth2 token cache cleared', 'info')
+  end, { desc = 'Bruno: clear every cached OAuth2 token' })
 
   command('BrunoAuthStatus', function()
     M.auth_status()

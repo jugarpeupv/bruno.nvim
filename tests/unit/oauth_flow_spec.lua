@@ -97,6 +97,76 @@ describe('oauth2 authorization code flow', function()
     os.remove(store_path)
   end)
 
+  it('clears every cached token', function()
+    local store_path = vim.fn.tempname() .. '-oauth2.json'
+    store.set_path(store_path)
+    store.set('one', { access_token = 'a' })
+    store.set('two', { access_token = 'b' })
+
+    oauth2.clear()
+
+    local remaining = store.load()
+    eq(0, vim.tbl_count(remaining))
+
+    store.set_path(nil)
+    os.remove(store_path)
+  end)
+
+  it('falls back to the loopback server for an unresolved callback URL', function()
+    local mock = mock_oauth.start()
+    local callback_port = mock_oauth.free_port()
+    local default_callback_url = ('http://127.0.0.1:%d/callback'):format(callback_port)
+
+    require('bruno').setup({
+      notify = false,
+      oauth2 = {
+        cache = true,
+        open_browser = true,
+        browser_cmd = { 'curl', '-sS', '-L' },
+        callback_timeout = 5000,
+        token_timeout = 5000,
+        default_callback_url = default_callback_url,
+      },
+    })
+
+    local store_path = vim.fn.tempname() .. '-oauth2.json'
+    store.set_path(store_path)
+
+    local request = parsers.parse_request(root .. '/bru-collection/requests/oauth2.bru')
+    local config = request.auth.config
+    config.authorization_url = mock.url .. '/authorize'
+    config.access_token_url = mock.url .. '/token'
+    config.refresh_token_url = mock.url .. '/token'
+    config.callback_url = '{{AUTH_CALLBACK_URL}}'
+    config.state = nil
+    config.pkce = true
+    config.credentials_placement = 'body'
+
+    local done = false
+    local token
+    local err
+    oauth2.login(request, {}, function(value, failure)
+      token = value
+      err = failure
+      done = true
+    end)
+
+    vim.wait(8000, function()
+      return done
+    end)
+
+    truthy(done, 'login timed out')
+    truthy(token, err)
+
+    local authorize = mock.get_authorize()
+    truthy(authorize)
+    eq({ default_callback_url }, authorize.redirect_uri)
+
+    mock.stop()
+    store.set_path(nil)
+    os.remove(store_path)
+  end)
+
   it('supports client credentials', function()
     local mock = mock_oauth.start({
       token_response = { access_token = 'client-token', expires_in = 3600, token_type = 'Bearer' },

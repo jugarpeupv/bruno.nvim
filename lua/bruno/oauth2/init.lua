@@ -503,7 +503,12 @@ local function exchange_code(config, code, redirect_uri, verifier, callback)
   )
 end
 
----@param config bruno.OAuth2Config
+---@param value? string
+---@return boolean
+local function is_unresolved_template(value)
+  return type(value) == 'string' and value:find('{{', 1, true) ~= nil
+end
+
 ---@param callback fun(token: bruno.Token?, err: string?)
 ---@param opts? { callback_url?: string }
 local function authorization_code_flow(config, callback, opts)
@@ -518,6 +523,11 @@ local function authorization_code_flow(config, callback, opts)
   end
 
   local redirect_uri = opts.callback_url or config.callback_url
+  if redirect_uri == nil or redirect_uri == '' or is_unresolved_template(redirect_uri) then
+    log.notify('Bruno: OAuth2 callback URL unresolved (' .. tostring(redirect_uri) .. '), using default', 'info')
+    redirect_uri = require('bruno.config').get().oauth2.default_callback_url
+  end
+  log.notify('Bruno: using OAuth2 callback URL: ' .. redirect_uri, 'info')
   local parsed = url_util.parse(redirect_uri or '')
   local is_loopback = parsed.scheme == 'http'
     and (parsed.host == '127.0.0.1' or parsed.host == 'localhost' or parsed.host == '::1')
@@ -631,6 +641,10 @@ local function authorization_code_flow(config, callback, opts)
 
   if not server_instance then
     -- Binding failed (port in use, privileged port, etc.). Fall back to manual input.
+    log.notify(
+      'Bruno: could not start OAuth2 callback server (' .. tostring(listen_err) .. '); paste the callback URL instead',
+      'warn'
+    )
     local opened, open_err = open_browser(config, authorization_url)
     if not opened then
       callback(
@@ -981,6 +995,12 @@ function M.logout(request, env)
     return false
   end
   return store.delete(key)
+end
+
+---Remove every cached OAuth2 token.
+---@return boolean cleared
+function M.clear()
+  return store.clear()
 end
 
 ---Return the cached token (never starts a browser or token request).

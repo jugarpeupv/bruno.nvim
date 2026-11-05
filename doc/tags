@@ -3,6 +3,7 @@
 :BrunoAuthClear	bruno.txt	/*:BrunoAuthClear*
 :BrunoAuthStatus	bruno.txt	/*:BrunoAuthStatus*
 :BrunoCancel	bruno.txt	/*:BrunoCancel*
+:BrunoClearTokens	bruno.txt	/*:BrunoClearTokens*
 :BrunoClose	bruno.txt	/*:BrunoClose*
 :BrunoCopy	bruno.txt	/*:BrunoCopy*
 :BrunoCopyCurl	bruno.txt	/*:BrunoCopyCurl*

@@ -121,6 +121,7 @@ require('bruno').setup({
     auto_open = true,
 
     default_tab = 'request',
+    result_tab = 'body',
     tabs = { 'request', 'body', 'headers', 'tests', 'scripts', 'timeline', 'raw', 'verbose' },
 
     -- Set any value to false to disable that keymap.
@@ -271,6 +272,7 @@ bruno.refresh_detection()   -- forces a fresh scan
 | `:BrunoStats` | Open the workbench on the Timeline tab. |
 | `:BrunoAuth [login\|clear\|status]` | Acquire, clear or inspect the OAuth2 token. |
 | `:BrunoAuthClear` | Clear the cached token for the current request. |
+| `:BrunoClearTokens` | Remove every cached OAuth2 token. |
 | `:BrunoAuthStatus` | Show OAuth2 cache status. |
 | `:BrunoCopy` / `:BrunoCopyCurl` | Copy the request as cURL. |
 | `:BrunoTab [name\|index]` | Select a workbench tab. |
@@ -298,11 +300,18 @@ loaded from the collection.
 With `ui.split = 'right'` (the default) it opens as a normal vertical split
 adjacent to the current window, not pinned to the far right.
 
+`ui.default_tab` controls the pane shown when the workbench is first opened
+without a result; `ui.result_tab` (default `body`) controls the pane the
+workbench opens on when a run auto-opens it for the first time, so it renders
+directly into that pane instead of briefly showing the Request pane. Re-running
+(`R`) keeps whichever tab you are currently on. The last selected tab is also
+remembered while the buffer is alive, so closing and toggling the workbench
+reopens it on the same tab.
+
 The buffer keeps `filetype=bruno_ui`, but it is treated as Markdown:
-Treesitter maps `bruno_ui` to the `markdown` parser, Markdown syntax is used as
-fallback, and the `render-markdown.nvim` integration adds `bruno_ui` to its
-filetypes automatically. `<leader>rm` / `:RenderMarkdown toggle` therefore work in the
-workbench, including when render-markdown is lazy-loaded by that key. Sections
+Treesitter maps `bruno_ui` to the `markdown` parser and Markdown syntax is used
+as fallback. If you use `render-markdown.nvim`, add `bruno_ui` to its own `ft`
+and `file_types` configuration to render the workbench. Sections
 are Markdown headings (`## ...`); use `za` on a heading to fold its section.
 
 The Body pane wraps the response payload in a fenced code block (JSON, XML,
@@ -371,7 +380,14 @@ The plugin also exposes `<Plug>(bruno-run)`, `<Plug>(bruno-open)` and
 
 If the callback URI is not a loopback HTTP URL (or the local port cannot be
 bound), the plugin opens the browser and asks you to paste the final redirected
-URL. This also works for custom URI schemes and remote callbacks.
+URL. This also works for custom URI schemes and remote callbacks. If the
+callback URL is empty or still contains an unresolved `{{...}}` template, the
+plugin falls back to `oauth2.default_callback_url` so it can start the loopback
+server instead of prompting.
+
+To force a full re-authentication, clear the token cache with
+`:BrunoClearTokens` (every token) or `:BrunoAuthClear` / `:BrunoAuth clear`
+(current request), then run the request again.
 
 ### `.bru` example
 
@@ -461,8 +477,8 @@ vim.fn.stdpath('cache') .. '/bruno.nvim/oauth2.json'
 
 The cache key is derived from the collection root, environment name,
 `credentialsId`, `clientId` and token URL, so different environments/providers
-do not collide. Use `:BrunoAuth clear` (or `:BrunoAuthClear`) to delete a
-token.
+do not collide. Use `:BrunoAuth clear` (or `:BrunoAuthClear`) to delete a token, or
+`:BrunoClearTokens` to remove the whole cache and force a full re-login.
 
 ### Security notes
 

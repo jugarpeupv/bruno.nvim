@@ -52,6 +52,7 @@ Configuration defaults: >lua
       height = 0.35,
       auto_open = true,
       default_tab = 'request',
+      result_tab = 'body',
       tabs = { 'request', 'body', 'headers', 'tests', 'scripts', 'timeline', 'raw', 'verbose' },
       keymaps = {
         next_tab = '<Tab>', prev_tab = '<S-Tab>',
@@ -171,6 +172,9 @@ Statusline integration: >lua
 :BrunoAuthClear                                         *:BrunoAuthClear*
         Clear the cached OAuth2 token.
 
+:BrunoClearTokens                                   *:BrunoClearTokens*
+        Remove every cached OAuth2 token, forcing a full re-login.
+
 :BrunoAuthStatus                                       *:BrunoAuthStatus*
         Show the cached OAuth2 status.
 
@@ -217,12 +221,19 @@ Below it is one pane per tab:
 With `ui.split = 'right'` (the default) the workbench opens as a normal
 vertical split adjacent to the current window, not pinned to the far right.
 
+`ui.default_tab` controls the pane shown when the workbench is first opened
+without a result; `ui.result_tab` (default `body`) controls the pane the
+workbench opens on when a run auto-opens it for the first time, so it renders
+directly into that pane instead of briefly showing the Request pane. Re-running
+(`R`) keeps whichever tab you are currently on. The last selected tab is also
+remembered while the buffer is alive, so closing and toggling the workbench
+reopens it on the same tab.
+
 The buffer keeps `filetype=bruno_ui`, but it is treated as Markdown:
-Treesitter maps `bruno_ui` to the `markdown` parser, Markdown syntax is used as
-fallback, and the `render-markdown.nvim` integration adds `bruno_ui` to its
-filetypes automatically. `:RenderMarkdown toggle` works in the workbench, including when
-render-markdown is lazy-loaded. Sections are Markdown headings (`## ...`); use
-`za` on a heading to fold its section.
+Treesitter maps `bruno_ui` to the `markdown` parser and Markdown syntax is used
+as fallback. If you use `render-markdown.nvim`, add `bruno_ui` to its own `ft`
+and `file_types` configuration to render the workbench. Sections are Markdown
+headings (`## ...`); use `za` on a heading to fold its section.
 
 Press `K` with the cursor over a `{{VARIABLE}}` to show its resolved value in a
 floating window. Press `K` again to focus the hover window; `q`, `Esc` or `K`
@@ -272,10 +283,16 @@ For authorization-code and implicit flows, the callback URL must be an
 `http://127.0.0.1:...` or `http://localhost:...` URL to use the built-in
 loopback server. Register that exact URL in your OAuth2 provider. If the URL is
 not a loopback HTTP URL (or the port cannot be bound), the browser is opened
-and you are asked to paste the final redirected URL.
+and you are asked to paste the final redirected URL. If the callback URL is
+empty or still contains an unresolved `{{...}}` template, the plugin falls back
+to `oauth2.default_callback_url` so it can start the loopback server instead of
+prompting.
 
 Tokens are cached at:
   `stdpath('cache')/bruno.nvim/oauth2.json` (mode 0600)
+
+Use `:BrunoAuth clear` (or |:BrunoAuthClear|) to delete one token, or
+|:BrunoClearTokens| to remove the whole cache and force a full re-login.
 
 The original request file is never modified. A temporary sibling file with the
 token injected as an `Authorization` header (or query parameter) is executed

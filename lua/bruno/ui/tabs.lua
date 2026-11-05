@@ -70,6 +70,21 @@ local function raw_block(lines, text)
   end
 end
 
+---@param lines string[]
+---@param language string
+---@param text string?
+local function fenced_block(lines, language, text)
+  if not text or text == '' then
+    lines[#lines + 1] = '  (none)'
+    return
+  end
+  lines[#lines + 1] = '```' .. language
+  for _, line in ipairs(vim.split(text, '\n', { plain = true })) do
+    lines[#lines + 1] = line
+  end
+  lines[#lines + 1] = '```'
+end
+
 ---@param result? bruno.Result
 ---@return table<string, any>?
 local function response_of(result)
@@ -191,7 +206,11 @@ function M.request_tab(request, env, running, error)
     if body.mode == 'json' and content then
       content = Json.pretty_string(content)
     end
-    raw_block(lines, content)
+    if body.mode == 'json' then
+      fenced_block(lines, 'json', content)
+    else
+      raw_block(lines, content)
+    end
   end
 
   if request.vars and (#(request.vars.req or {}) > 0 or #(request.vars.res or {}) > 0) then
@@ -207,17 +226,17 @@ function M.request_tab(request, env, running, error)
   if request.script and (request.script.pre or request.script.post) then
     if request.script.pre then
       section(lines, 'PRE-REQUEST SCRIPT')
-      raw_block(lines, request.script.pre)
+      fenced_block(lines, 'javascript', request.script.pre)
     end
     if request.script.post then
       section(lines, 'POST-RESPONSE SCRIPT')
-      raw_block(lines, request.script.post)
+      fenced_block(lines, 'javascript', request.script.post)
     end
   end
 
   if request.tests then
     section(lines, 'TESTS')
-    raw_block(lines, request.tests)
+    fenced_block(lines, 'javascript', request.tests)
   end
 
   if request.docs then
@@ -449,6 +468,141 @@ local function command_text(command)
   return table.concat(parts, ' ')
 end
 
+---@param vars table<string, string>?
+---@return string[]
+local function sorted_var_names(vars)
+  local names = {}
+  for name in pairs(vars or {}) do
+    names[#names + 1] = tostring(name)
+  end
+  table.sort(names)
+  return names
+end
+
+---@param value any
+---@return string
+local function var_value_string(value)
+  if value == nil or value == vim.NIL then
+    return ''
+  end
+  if type(value) == 'table' then
+    return Json.pretty(value)
+  end
+  return tostring(value)
+end
+
+---Evaluate the right-hand side of a `bru.setVar(...)` / `bru.setEnvVar(...)`
+---against the response. Supports `res.getStatus()` and dotted
+---`res.getBody().field` access, plus string/number/boolean literals.
+---@param expr string
+---@param response table
+---@return any
+local function eval_script_expression(expr, response)
+  expr = vim.trim(expr)
+
+  local str = expr:match('^"(.*)"$') or expr:match("^'(.*)'$")
+  if str ~= nil then
+    return str
+  end
+  if expr == 'true' then
+    return true
+  end
+  if expr == 'false' then
+    return false
+  end
+  if expr == 'null' or expr == 'undefined' then
+    return nil
+  end
+  local num = tonumber(expr)
+  if num ~= nil then
+    return num
+  end
+
+  if expr:match('^res%.getStatus%(%s*%)$') then
+    return response.status
+  end
+  if expr:match('^res%.getBody%(%s*%)$') then
+    return response.data
+  end
+
+  local chain = expr:match('^res%.getBody%(%s*%)%.(.+)$')
+  if chain then
+    local value = response.data
+    for part in chain:gmatch('[^%.]+') do
+      if type(value) ~= 'table' then
+        value = nil
+        break
+      end
+      value = value[part]
+    end
+    return value
+  end
+
+  return nil
+end
+
+---Parse `bru.setVar("name", value)` and `bru.setEnvVar("name", value)` from a
+---script and resolve the values against the response.
+---@param script string?
+---@param response table
+---@return table<string, string>
+local function extract_script_vars(script, response)
+  local result = {}
+  if type(script) ~= 'string' or script == '' then
+    return result
+  end
+
+  for line in script:gmatch('[^\r\n]+') do
+    local name, expr = line:match('bru%.set%w+%(%s*["\']([^"\']+)["\']%s*,%s*(.+)$')
+    if name and expr then
+      expr = expr:gsub('%s*;%s*$', ''):gsub('%s*%)%s*$', ''):gsub('^%s+', '')
+      local value = eval_script_expression(expr, response)
+      if value ~= nil then
+        result[name] = var_value_string(value)
+      end
+    end
+  end
+
+  return result
+end
+
+---@param before table<string, string>?
+---@param after table<string, string>?
+---@return string[]
+local function vars_diff_lines(before, after)
+  local names = {}
+  local seen = {}
+  for _, name in ipairs(sorted_var_names(before)) do
+    seen[name] = true
+    names[#names + 1] = name
+  end
+  for _, name in ipairs(sorted_var_names(after)) do
+    if not seen[name] then
+      seen[name] = true
+      names[#names + 1] = name
+    end
+  end
+  table.sort(names)
+
+  local lines = {}
+  for _, name in ipairs(names) do
+    local old_value = before and before[name]
+    local new_value = after and after[name]
+    if old_value == nil and new_value ~= nil then
+      lines[#lines + 1] = string.format('+ %s = %s', name, var_value_string(new_value))
+    elseif new_value == nil and old_value ~= nil then
+      lines[#lines + 1] = string.format('- %s', name)
+    elseif var_value_string(old_value) ~= var_value_string(new_value) then
+      lines[#lines + 1] = string.format('- %s = %s', name, var_value_string(old_value))
+      lines[#lines + 1] = string.format('+ %s = %s', name, var_value_string(new_value))
+    end
+  end
+  if #lines == 0 then
+    lines[#lines + 1] = '(no changes)'
+  end
+  return lines
+end
+
 ---@param result? bruno.RunResult
 ---@param running boolean
 ---@param error? string
@@ -544,6 +698,25 @@ function M.scripts_tab(request, result, running, error)
     phases.post,
     collect_tests(result, 'postResponseTestResults')
   )
+
+  local first = result.results[1]
+  local response = first and response_of(first) or {}
+  local script_vars = extract_script_vars(request.script and request.script.post, response)
+
+  local after_vars = {}
+  for name, value in pairs(result.vars_after or {}) do
+    after_vars[name] = value
+  end
+  for name, value in pairs(script_vars) do
+    after_vars[name] = value
+  end
+
+  if result.vars_before ~= nil or next(after_vars) ~= nil then
+    section(lines, 'ENVIRONMENT VARIABLES')
+    lines[#lines + 1] = '```diff'
+    vim.list_extend(lines, vars_diff_lines(result.vars_before, after_vars))
+    lines[#lines + 1] = '```'
+  end
 
   script_section(lines, 'TESTS', request.tests, phases.tests, collect_tests(result, 'testResults'))
 

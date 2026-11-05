@@ -14,6 +14,7 @@ M.defaults = {
     height = 0.35,
     auto_open = true,
     default_tab = 'request',
+    result_tab = 'body',
     tabs = { 'request', 'body', 'headers', 'tests', 'scripts', 'timeline', 'raw', 'verbose' },
     keymaps = {
       next_tab = '<Tab>',

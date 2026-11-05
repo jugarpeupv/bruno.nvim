@@ -139,6 +139,7 @@ local function execute(request, staged_path, opts, env)
 
   state.last_command = command
   state.running = true
+  state.env_before = parsers.request_vars(request, env)
   ui.before_run(request)
 
   vim.api.nvim_exec_autocmds('User', {

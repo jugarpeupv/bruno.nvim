@@ -16,6 +16,8 @@ local M = {
   running = false,
   ---@type string[]?
   last_command = nil,
+  ---@type table<string, string>?
+  env_before = nil,
 }
 
 ---@param request bruno.Request
@@ -82,6 +84,7 @@ function M.reset()
   M.running = false
   M.job = nil
   M.last_command = nil
+  M.env_before = nil
   require('bruno.history').reset()
 end
 

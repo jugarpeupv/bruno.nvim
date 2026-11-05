@@ -38,6 +38,15 @@ describe('oauth2.server', function()
     instance:stop()
   end)
 
+  it('binds the localhost callback host', function()
+    local port = free_port()
+    local instance, err = server.listen({ host = 'localhost', port = port, path = '/callback' }, function()
+      return { status = 200, body = 'ok' }
+    end)
+    truthy(instance, err)
+    instance:stop()
+  end)
+
   it('serves the implicit-flow capture page', function()
     local port = free_port()
     local instance, err = server.listen({ host = '127.0.0.1', port = port, path = '/callback' }, function()

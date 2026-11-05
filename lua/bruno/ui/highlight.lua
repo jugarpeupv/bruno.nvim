@@ -7,8 +7,6 @@ M.groups = {
   BrunoMethod = { link = 'Statement', default = true },
   BrunoUrl = { link = 'String', default = true },
   BrunoEnv = { link = 'DiagnosticInfo', default = true },
-  BrunoSection = { link = 'Special', default = true },
-  BrunoSectionLine = { link = 'CursorLine', default = true },
   BrunoKey = { link = 'Identifier', default = true },
   BrunoValue = { link = 'Normal', default = true },
   BrunoMuted = { link = 'Comment', default = true },

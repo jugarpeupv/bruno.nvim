@@ -37,6 +37,20 @@ local namespace = vim.api.nvim_create_namespace('bruno-ui')
 local logs_refresh_pending = false
 local logs_listener_registered = false
 
+---Return a tab name that is present in `config.ui.tabs`, falling back to the
+---first tab when `name` is missing or unknown.
+---@param config bruno.Config
+---@param name string?
+---@return string
+local function valid_tab_name(config, name)
+  for _, candidate in ipairs(config.ui.tabs) do
+    if candidate == name then
+      return name
+    end
+  end
+  return config.ui.tabs[1] or 'request'
+end
+
 ---@param bufnr integer
 ---@return bruno.UIState
 function M.state(bufnr)
@@ -45,7 +59,7 @@ function M.state(bufnr)
     or {
       request = nil,
       result = nil,
-      tab = config.ui.default_tab,
+      tab = valid_tab_name(config, config.ui.default_tab),
       running = false,
       error = nil,
     }
@@ -387,12 +401,8 @@ local function apply_highlights(bufnr, lines, tab_spans, title_spans, meta_spans
     local line = lines[index]
     local row = index - 1
     if is_section(line) then
+      -- Leave headings to Markdown/Treesitter highlighting.
       last_status = nil
-      vim.api.nvim_buf_set_extmark(bufnr, namespace, row, 0, {
-        end_col = #line,
-        hl_group = 'BrunoSection',
-        line_hl_group = 'BrunoSectionLine',
-      })
     else
       local key_start, key_end = line:find('^  ([%w%._%-]+)[:=]')
       if key_start then
@@ -715,7 +725,12 @@ function M.open(opts)
   end
   local bufnr = M.buf
 
+  local is_new_state = states[bufnr] == nil
   local ui_state = M.state(bufnr)
+  local config = require('bruno.config').get()
+  if opts.preserve_result and is_new_state then
+    ui_state.tab = valid_tab_name(config, config.ui.result_tab)
+  end
   if not opts.preserve_result then
     history.seed(request)
   end
@@ -789,7 +804,6 @@ function M.open(opts)
     vim.wo[M.win].cursorline = false
     vim.wo[M.win].spell = false
     vim.wo[M.win].list = false
-    vim.wo[M.win].conceallevel = 0
   end
 
   bind_keymaps(bufnr)
@@ -820,8 +834,6 @@ function M.open(opts)
     pcall(vim.treesitter.start, bufnr, 'markdown')
   end
 
-  pcall(require('bruno.integrations.render_markdown').attach_buffer, bufnr)
-
   return bufnr
 end
 
@@ -849,6 +861,8 @@ end
 function M.show_result(result)
   state.set_result(result)
   history.record(result.request, result, result.env)
+  result.vars_before = state.env_before
+  result.vars_after = parsers.request_vars(result.request, result.env)
   local bufnr = M.buf
   if valid_buf(bufnr) then
     local ui_state = M.state(bufnr)
@@ -856,9 +870,6 @@ function M.show_result(result)
     ui_state.result = result
     ui_state.running = false
     ui_state.error = nil
-    if ui_state.tab == 'request' then
-      ui_state.tab = 'body'
-    end
     M.render(bufnr, { reset_cursor = true })
   end
 end

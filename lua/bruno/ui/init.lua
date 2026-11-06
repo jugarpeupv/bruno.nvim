@@ -228,11 +228,11 @@ end
 ---@param request? bruno.Request
 ---@param ui_state bruno.UIState
 ---@param env? string
----@return string
+---@return string[] lines
 ---@return table[] spans
 local function build_title(request, ui_state, env)
   if not request then
-    return 'Bruno', {}
+    return { 'Bruno' }, {}
   end
 
   local method = request.method or 'GET'
@@ -242,17 +242,17 @@ local function build_title(request, ui_state, env)
   end
   local text = method .. '  ' .. target
   local spans = {
-    { col = 0, end_col = #method, hl = 'BrunoMethod' },
-    { col = #method + 2, end_col = #method + 2 + #target, hl = 'BrunoUrl' },
+    { row = 0, col = 0, end_col = #method, hl = 'BrunoMethod' },
+    { row = 0, col = #method + 2, end_col = #method + 2 + #target, hl = 'BrunoUrl' },
   }
 
   local suffix
   local suffix_hl = 'BrunoMuted'
   if ui_state.running then
-    suffix = '  ● running'
+    suffix = '● running'
     suffix_hl = 'BrunoRunning'
   elseif ui_state.error then
-    suffix = '  ·  error'
+    suffix = 'error'
     suffix_hl = 'BrunoError'
   elseif ui_state.result and ui_state.result.results[1] then
     local item = ui_state.result.results[1]
@@ -266,15 +266,18 @@ local function build_title(request, ui_state, env)
     local size = response.size
     local time_text = time and string.format('%.0f ms', tonumber(time) or 0) or '—'
     local size_text = size and tabs.bytes(size) or '—'
-    suffix = string.format('  ·  %s%s  ·  %s  ·  %s', tostring(status), status_text, time_text, size_text)
+    suffix = string.format('%s%s  ·  %s  ·  %s', tostring(status), status_text, time_text, size_text)
     suffix_hl = status_hl(status)
   else
-    suffix = '  ·  not run yet'
+    suffix = 'not run yet'
   end
 
-  text = text .. suffix
-  spans[#spans + 1] = { col = #text - #suffix, end_col = #text, hl = suffix_hl }
-  return text, spans
+  local lines = { text }
+  if suffix and suffix ~= '' then
+    lines[#lines + 1] = suffix
+    spans[#spans + 1] = { row = 1, col = 0, end_col = #suffix, hl = suffix_hl }
+  end
+  return lines, spans
 end
 
 ---@param bufnr integer
@@ -372,7 +375,8 @@ end
 ---@param tab_spans table[]
 ---@param title_spans table[]
 ---@param meta_spans table[]
-local function apply_highlights(bufnr, lines, tab_spans, title_spans, meta_spans)
+---@param header_len integer
+local function apply_highlights(bufnr, lines, tab_spans, title_spans, meta_spans, header_len)
   vim.api.nvim_buf_clear_namespace(bufnr, namespace, 0, -1)
 
   for _, span in ipairs(tab_spans) do
@@ -383,21 +387,22 @@ local function apply_highlights(bufnr, lines, tab_spans, title_spans, meta_spans
   end
 
   for _, span in ipairs(title_spans) do
-    vim.api.nvim_buf_set_extmark(bufnr, namespace, 1, span.col, {
+    vim.api.nvim_buf_set_extmark(bufnr, namespace, 1 + (span.row or 0), span.col, {
       end_col = span.end_col,
       hl_group = span.hl,
     })
   end
 
+  local meta_row = header_len - 2
   for _, span in ipairs(meta_spans) do
-    vim.api.nvim_buf_set_extmark(bufnr, namespace, 2, span.col, {
+    vim.api.nvim_buf_set_extmark(bufnr, namespace, meta_row, span.col, {
       end_col = span.end_col,
       hl_group = span.hl,
     })
   end
 
   local last_status
-  for index = 5, #lines do
+  for index = header_len + 1, #lines do
     local line = lines[index]
     local row = index - 1
     if is_section(line) then
@@ -490,14 +495,18 @@ function M.render(bufnr, opts)
   local tabline = tabline_lines[1]
   vim.b[bufnr].bruno_tab_regions = tab_regions
   local env = ui_state.request and env_for(ui_state.request) or ''
-  local title, title_spans = build_title(ui_state.request, ui_state, env)
+  local title_lines, title_spans = build_title(ui_state.request, ui_state, env)
   local content = build_content(bufnr, env)
   local history_position = history.position()
   local request_total = history.count()
   local request_index = history_position >= 1 and history_position or nil
   local meta, meta_spans = build_meta(env, request_index, request_total)
 
-  local lines = { tabline, title, meta, '' }
+  local lines = { tabline }
+  vim.list_extend(lines, title_lines)
+  lines[#lines + 1] = meta
+  lines[#lines + 1] = ''
+  local header_len = #lines
   vim.list_extend(lines, content)
 
   if #lines > 0 and lines[#lines] ~= '' then
@@ -524,12 +533,12 @@ function M.render(bufnr, opts)
     vim.bo[bufnr].syntax = 'markdown'
   end
 
-  apply_highlights(bufnr, lines, tab_spans, title_spans, meta_spans)
+  apply_highlights(bufnr, lines, tab_spans, title_spans, meta_spans, header_len)
 
   local win = M.win
   if valid_win(win) and vim.api.nvim_win_get_buf(win) == bufnr then
-    if opts.reset_cursor or cursor_line < 5 or cursor_line > #lines then
-      pcall(vim.api.nvim_win_set_cursor, win, { 5, 0 })
+    if opts.reset_cursor or cursor_line < header_len + 1 or cursor_line > #lines then
+      pcall(vim.api.nvim_win_set_cursor, win, { header_len + 1, 0 })
     else
       pcall(vim.api.nvim_win_set_cursor, win, { math.min(cursor_line, #lines), 0 })
     end

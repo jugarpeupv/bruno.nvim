@@ -258,6 +258,7 @@ function M.setup(opts)
 
   require('bruno.ui').setup()
   pcall(vim.treesitter.language.register, 'markdown', 'bruno_ui')
+  require('bruno.ts_injections').setup()
 
   vim.filetype.add({
     extension = {

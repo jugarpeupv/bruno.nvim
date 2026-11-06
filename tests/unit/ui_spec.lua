@@ -20,19 +20,19 @@ describe('ui.workbench', function()
     match(lines[1], '%[Request%]')
     match(lines[2], 'POST')
     match(lines[2], 'http://127%.0%.0%.1:8765/users')
-    match(lines[3], '^Request: %d+/%d+ · Selected env: Local')
-    match(lines[5], '^## REQUEST')
+    match(lines[4], '^Request: %d+/%d+ · Selected env: Local')
+    match(lines[6], '^## REQUEST')
     eq('', vim.wo[ui.win].winbar)
 
     local env_mod = require('bruno.env')
     env_mod.clear(request.root)
     ui.render(bufnr)
     lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-    match(lines[3], '^Request: %d+/%d+ · Selected env: none')
+    match(lines[4], '^Request: %d+/%d+ · Selected env: none')
     env_mod.set(request.root, 'Local')
     ui.render(bufnr)
     lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-    match(lines[3], '^Request: %d+/%d+ · Selected env: Local')
+    match(lines[4], '^Request: %d+/%d+ · Selected env: Local')
 
     ui.select_tab('body')
     lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
@@ -80,7 +80,7 @@ describe('ui.workbench', function()
 
     ui.show_result(result)
     lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-    match(lines[2], '200 OK')
+    match(lines[3], '200 OK')
     local rendered = table.concat(lines, '\n')
     match(rendered, '"ok": true')
     match(rendered, '```json')
@@ -269,7 +269,7 @@ describe('ui.workbench', function()
     truthy(bufnr)
 
     local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-    match(lines[3], 'Request: 1/1')
+    match(lines[4], 'Request: 1/1')
 
     local function result(status, body)
       return {
@@ -304,29 +304,29 @@ describe('ui.workbench', function()
 
     ui.show_result(result(200, 1))
     lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-    match(lines[3], 'Request: 2/2')
+    match(lines[4], 'Request: 2/2')
 
     ui.show_result(result(201, 2))
     lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-    match(lines[3], 'Request: 3/3')
+    match(lines[4], 'Request: 3/3')
     ui.select_tab('body')
     lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
     match(table.concat(lines, '\n'), '"run": 2')
 
     ui.prev_response()
     lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-    match(lines[3], 'Request: 2/3')
+    match(lines[4], 'Request: 2/3')
     match(table.concat(lines, '\n'), '200 OK')
     match(table.concat(lines, '\n'), '"run": 1')
 
     ui.prev_response()
     lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-    match(lines[3], 'Request: 1/3')
-    match(lines[2], 'not run yet')
+    match(lines[4], 'Request: 1/3')
+    match(lines[3], 'not run yet')
 
     ui.next_response()
     lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-    match(lines[3], 'Request: 2/3')
+    match(lines[4], 'Request: 2/3')
 
     ui.destroy()
   end)
@@ -451,7 +451,7 @@ describe('ui.workbench', function()
 
     ui.before_run(request)
     local lines = vim.api.nvim_buf_get_lines(ui.buf, 0, -1, false)
-    match(lines[3], '^Selected env: Local')
+    match(lines[4], '^Selected env: Local')
 
     ui.show_result({
       request = request,
@@ -482,7 +482,7 @@ describe('ui.workbench', function()
     })
 
     lines = vim.api.nvim_buf_get_lines(ui.buf, 0, -1, false)
-    match(lines[3], '^Request: 1/1 · Selected env: Local')
+    match(lines[4], '^Request: 1/1 · Selected env: Local')
 
     ui.destroy()
   end)
@@ -611,11 +611,11 @@ describe('ui.workbench', function()
       return
     end
 
-    vim.api.nvim_win_set_cursor(ui.win, { 5, 0 })
+    vim.api.nvim_win_set_cursor(ui.win, { 6, 0 })
     vim.cmd('normal! za')
-    eq(5, vim.fn.foldclosed(5))
+    eq(6, vim.fn.foldclosed(6))
     vim.cmd('normal! za')
-    eq(-1, vim.fn.foldclosed(5))
+    eq(-1, vim.fn.foldclosed(6))
     ui.destroy()
   end)
 

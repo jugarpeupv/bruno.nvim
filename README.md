@@ -15,6 +15,8 @@ app.
 ## Features
 
 - Run `.bru` and OpenCollection `.yml` requests through `bru run`.
+- Treesitter injection so `scripts[].code` blocks in OpenCollection `.yml`
+  files are highlighted as JavaScript instead of a plain string.
 - Automatic collection detection from the current working directory, cached per
   `cwd`.
 - Automatic environment selection when a collection has exactly one
@@ -257,18 +259,19 @@ The workbench buffer layout is:
 
 ```text
 Request  Body  Headers  Tests  Scripts  Timeline  Raw  [Verbose]
-GET  http://127.0.0.1:8765/archetypes  ·  200 OK  ·  1498 ms  ·  15.7 KiB
+GET  http://127.0.0.1:8765/archetypes
+200 OK  ·  1498 ms  ·  15.7 KiB
 Request: 2/3 · Selected env: dev
 ```
 
-The URL in the second line is resolved with the selected environment. The third
-line shows the execution history position followed by the selected environment.
-The winbar is not used. Manually opening the workbench shows `Request: 1/1`;
-every run (including replay) appends a new entry and selects it (`2/2`, `3/3`,
-…). When `auto_open` opens the workbench for the first run, no extra placeholder
-is added, so that first run is `1/1`. `(` / `)` move back and forward through
-previous executions without running anything, staying on whichever tab you are
-currently viewing.
+The URL in the second line is resolved with the selected environment. The status
+line (status, duration, size) and the execution-history line each get their own
+line. The winbar is not used. Manually opening the workbench shows
+`Request: 1/1`; every run (including replay) appends a new entry and selects it
+(`2/2`, `3/3`, …). When `auto_open` opens the workbench for the first run, no
+extra placeholder is added, so that first run is `1/1`. `(` / `)` move back and
+forward through previous executions without running anything, staying on
+whichever tab you are currently viewing.
 
 With `ui.split = 'right'` (the default) it opens as a normal vertical split
 adjacent to the current window, not pinned to the far right.

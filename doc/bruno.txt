@@ -192,14 +192,15 @@ Statusline integration: >lua
 The workbench is a single nofile buffer with this top area:
 
   Request  Body  Headers  Tests  Scripts  Timeline  Raw  [Verbose]
-  GET  http://127.0.0.1:8765/archetypes  ·  200 OK  ·  1498 ms  ·  15.7 KiB
+  GET  http://127.0.0.1:8765/archetypes
+  200 OK  ·  1498 ms  ·  15.7 KiB
   Request: 2/3 · Selected env: dev
 
-The URL is resolved with the selected environment. The third line shows the
-execution history position followed by the selected environment. The winbar is
-left empty. Manually opening the workbench shows `Request: 1/1`; every run
-(including replay) appends a new entry and selects it (`2/2`, `3/3`, …). When
-`auto_open` opens the workbench for the first run, no extra placeholder is
+The URL is resolved with the selected environment. The status line (status,
+duration, size) and the execution-history line each get their own line. The
+winbar is left empty. Manually opening the workbench shows `Request: 1/1`; every
+run (including replay) appends a new entry and selects it (`2/2`, `3/3`, …).
+When `auto_open` opens the workbench for the first run, no extra placeholder is
 added, so that first run is `1/1`. `(` / `)` move back and forward through
 previous executions without running anything, staying on whichever tab you are
 currently viewing.

@@ -172,16 +172,6 @@ function M.current_request()
   return current_request()
 end
 
----Move to the next request in the current collection.
-function M.next_request()
-  require('bruno.ui').next_request()
-end
-
----Move to the previous request in the current collection.
-function M.prev_request()
-  require('bruno.ui').prev_request()
-end
-
 ---Show the previous execution in the workbench history.
 function M.prev_response()
   require('bruno.ui').prev_response()

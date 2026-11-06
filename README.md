@@ -57,33 +57,10 @@ With [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 ```lua
 {
-  'your-user/bruno.nvim',
+  'jugarpeupv/bruno.nvim',
   ft = { 'bruno' },
   opts = {},
 }
-```
-
-For local development:
-
-```lua
-{
-  dir = vim.fn.expand('~/projects/bruno.nvim'),
-  name = 'bruno',
-  ft = { 'bruno' },
-  opts = {},
-}
-```
-
-The plugin registers the `.bru` filetype automatically.
-
-### Migrating from `SugarHashira/bruno.nvim`
-
-The command names (`:BrunoRun`, `:BrunoEnv`, `:BrunoRequests`, …) intentionally
-match the older plugin. Disable the old spec before enabling this one to avoid
-duplicate commands and filetype handlers:
-
-```lua
-{ 'SugarHashira/bruno.nvim', enabled = false },
 ```
 
 ## Configuration
@@ -121,15 +98,12 @@ require('bruno').setup({
     auto_open = true,
 
     default_tab = 'request',
-    result_tab = 'body',
     tabs = { 'request', 'body', 'headers', 'tests', 'scripts', 'timeline', 'raw', 'verbose' },
 
     -- Set any value to false to disable that keymap.
     keymaps = {
       next_tab = '<Tab>',
       prev_tab = '<S-Tab>',
-      next_request = '}',
-      prev_request = '{',
       next_response = ')',
       prev_response = '(',
       tab_1 = '1',
@@ -140,16 +114,15 @@ require('bruno').setup({
       tab_6 = '6',
       tab_7 = '7',
       tab_8 = '8',
-      run = 'R',
-      replay = 'r',
-      edit_source = 'e',
-      env = 'ge',
+      replay = 'R',
+      edit_source = 'ge',
+      env = 'gE',
       requests = 'p',
       auth = 'a',
       auth_clear = 'A',
-      copy_curl = 'c',
-      yank_body = 'y',
-      yank_raw = 'Y',
+      copy_curl = 'C',
+      yank_body = 'cb',
+      yank_raw = 'cr',
       help = '?',
       close = 'q',
       hover = 'K',
@@ -294,19 +267,17 @@ The winbar is not used. Manually opening the workbench shows `Request: 1/1`;
 every run (including replay) appends a new entry and selects it (`2/2`, `3/3`,
 …). When `auto_open` opens the workbench for the first run, no extra placeholder
 is added, so that first run is `1/1`. `(` / `)` move back and forward through
-previous executions without running anything. `{` / `}` change the request
-loaded from the collection.
+previous executions without running anything, staying on whichever tab you are
+currently viewing.
 
 With `ui.split = 'right'` (the default) it opens as a normal vertical split
 adjacent to the current window, not pinned to the far right.
 
-`ui.default_tab` controls the pane shown when the workbench is first opened
-without a result; `ui.result_tab` (default `body`) controls the pane the
-workbench opens on when a run auto-opens it for the first time, so it renders
-directly into that pane instead of briefly showing the Request pane. Re-running
-(`R`) keeps whichever tab you are currently on. The last selected tab is also
-remembered while the buffer is alive, so closing and toggling the workbench
-reopens it on the same tab.
+`ui.default_tab` controls the pane shown the first time the workbench is
+opened. After that, the workbench always stays on whichever tab you are
+currently viewing — including when a run finishes or when re-running (`R`).
+The last selected tab is remembered while the buffer is alive, so closing and
+toggling the workbench reopens it on the same tab.
 
 The buffer keeps `filetype=bruno_ui`, but it is treated as Markdown:
 Treesitter maps `bruno_ui` to the `markdown` parser and Markdown syntax is used
@@ -520,8 +491,6 @@ bruno.run('/path/to/x.bru') -- explicit request
 bruno.replay()
 bruno.cancel()
 bruno.toggle()              -- focus/close/open the workbench
-bruno.next_request()        -- next request in the collection
-bruno.prev_request()        -- previous request in the collection
 bruno.next_response()       -- next execution in the workbench history
 bruno.prev_response()       -- previous execution in the workbench history
 bruno.env('Local')

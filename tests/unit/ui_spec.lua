@@ -254,43 +254,6 @@ describe('ui.workbench', function()
     ui.destroy()
   end)
 
-  it('navigates collection requests without touching the execution counter', function()
-    require('bruno').setup({
-      notify = false,
-      default_env = nil,
-      ui = { auto_open = false },
-    })
-    require('bruno.state').reset()
-    require('bruno.env').reset()
-    local requests = require('bruno.requests')
-    requests.clear()
-
-    local summaries = requests.list(root .. '/bru-collection', true)
-    truthy(#summaries >= 2)
-    local first = parsers.parse_request(summaries[1].path)
-    local second = parsers.parse_request(summaries[2].path)
-
-    local ui = require('bruno.ui')
-    ui.open({ request = first })
-    local lines = vim.api.nvim_buf_get_lines(ui.buf, 0, -1, false)
-    match(lines[3], 'Request: 1/1')
-
-    ui.next_request()
-    eq(second.path, require('bruno.state').last_request.path)
-    lines = vim.api.nvim_buf_get_lines(ui.buf, 0, -1, false)
-    match(lines[2], second.method .. '  ')
-    match(lines[3], 'Request: 1/1')
-
-    ui.prev_request()
-    eq(first.path, require('bruno.state').last_request.path)
-    lines = vim.api.nvim_buf_get_lines(ui.buf, 0, -1, false)
-    match(lines[2], first.method .. '  ')
-    match(lines[3], 'Request: 1/1')
-
-    ui.destroy()
-    requests.clear()
-  end)
-
   it('keeps an execution history and navigates it with ( and )', function()
     require('bruno').setup({
       notify = false,
@@ -524,11 +487,11 @@ describe('ui.workbench', function()
     ui.destroy()
   end)
 
-  it('lands on the configured result_tab when auto-opened for the first run', function()
+  it('lands on the configured default_tab when auto-opened for the first run', function()
     require('bruno').setup({
       notify = false,
       default_env = nil,
-      ui = { auto_open = true, result_tab = 'headers' },
+      ui = { auto_open = true, default_tab = 'headers' },
     })
     require('bruno.state').reset()
     require('bruno.env').reset()

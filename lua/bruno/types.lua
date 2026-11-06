@@ -199,8 +199,6 @@
 ---@class bruno.UIKeymaps
 ---@field next_tab string|false
 ---@field prev_tab string|false
----@field next_request string|false
----@field prev_request string|false
 ---@field next_response string|false
 ---@field prev_response string|false
 ---@field tab_1 string|false
@@ -211,7 +209,6 @@
 ---@field tab_6 string|false
 ---@field tab_7 string|false
 ---@field tab_8 string|false
----@field run string|false
 ---@field replay string|false
 ---@field edit_source string|false
 ---@field env string|false
@@ -232,7 +229,6 @@
 ---@field height number
 ---@field auto_open boolean
 ---@field default_tab string
----@field result_tab string
 ---@field tabs string[]
 ---@field keymaps bruno.UIKeymaps
 

@@ -607,12 +607,6 @@ local function bind_keymaps(bufnr)
   map('prev_tab', function()
     M.next_tab(-1)
   end, 'Bruno: previous tab')
-  map('next_request', function()
-    M.next_request()
-  end, 'Bruno: next request in collection')
-  map('prev_request', function()
-    M.prev_request()
-  end, 'Bruno: previous request in collection')
   map('next_response', function()
     M.next_response()
   end, 'Bruno: next execution history entry')
@@ -626,11 +620,6 @@ local function bind_keymaps(bufnr)
     end, 'Bruno: select tab ' .. index)
   end
 
-  map('run', function()
-    if M.state(bufnr).request then
-      require('bruno.runner').run(M.state(bufnr).request)
-    end
-  end, 'Bruno: run request')
   map('replay', function()
     require('bruno.runner').replay()
   end, 'Bruno: replay last request')
@@ -705,7 +694,6 @@ local function apply_history_entry(ui_state, entry)
   ui_state.result = entry.result
   ui_state.error = entry.error
   ui_state.running = false
-  ui_state.tab = (entry.result or entry.error) and 'body' or 'request'
 end
 
 ---@param opts? { request?: bruno.Request, preserve_result?: boolean, focus?: boolean }
@@ -725,12 +713,7 @@ function M.open(opts)
   end
   local bufnr = M.buf
 
-  local is_new_state = states[bufnr] == nil
   local ui_state = M.state(bufnr)
-  local config = require('bruno.config').get()
-  if opts.preserve_result and is_new_state then
-    ui_state.tab = valid_tab_name(config, config.ui.result_tab)
-  end
   if not opts.preserve_result then
     history.seed(request)
   end
@@ -977,66 +960,6 @@ end
 ---Show the next execution in the history.
 function M.next_response()
   M.navigate_response(1)
-end
-
----Move to the next/previous request in the current collection.
----@param delta integer
-function M.navigate_request(delta)
-  local bufnr = M.buf
-  if not valid_buf(bufnr) then
-    return
-  end
-
-  local ui_state = M.state(bufnr)
-  local request = ui_state.request or state.last_request
-  if not request then
-    log.notify('Bruno: no request selected', 'warn')
-    return
-  end
-  if state.running then
-    log.notify('Bruno: a request is still running', 'warn')
-    return
-  end
-
-  local summary, index, total = require('bruno.requests').move(request.root, delta, request.path)
-  if not summary then
-    log.notify('Bruno: no requests found in ' .. request.root, 'warn')
-    return
-  end
-
-  local ok, new_request = pcall(parsers.parse_request, summary.path)
-  if not ok then
-    log.notify('Bruno: could not read request: ' .. tostring(new_request), 'error')
-    return
-  end
-
-  state.set_request(new_request)
-  state.last_result = nil
-  require('bruno.env').ensure(new_request.root)
-
-  local entry = history.select_last_for(new_request.path)
-  if entry then
-    apply_history_entry(ui_state, entry)
-  else
-    ui_state.request = new_request
-    ui_state.result = nil
-    ui_state.error = nil
-    ui_state.running = false
-    ui_state.tab = 'request'
-  end
-  M.render(bufnr, { reset_cursor = true })
-
-  log.info(string.format('Bruno: request %d/%d — %s', index or 0, total or 0, new_request.name))
-end
-
----Move to the next request in the collection.
-function M.next_request()
-  M.navigate_request(1)
-end
-
----Move to the previous request in the collection.
-function M.prev_request()
-  M.navigate_request(-1)
 end
 
 ---@return integer?
@@ -1309,14 +1232,11 @@ function M.help()
     '',
     string.format('  %-8s %s', keymaps.next_tab or '—', 'next tab'),
     string.format('  %-8s %s', keymaps.prev_tab or '—', 'previous tab'),
-    string.format('  %-8s %s', keymaps.next_request or '—', 'next request in collection'),
-    string.format('  %-8s %s', keymaps.prev_request or '—', 'previous request in collection'),
     string.format('  %-8s %s', keymaps.next_response or '—', 'next execution in history'),
     string.format('  %-8s %s', keymaps.prev_response or '—', 'previous execution in history'),
     string.format('  %-8s %s', keymaps.select_tab or '—', 'open tab under cursor'),
     string.format('  %-8s %s', '1..' .. #config.ui.tabs, 'select tab directly'),
     '',
-    string.format('  %-8s %s', keymaps.run or '—', 'run current request'),
     string.format('  %-8s %s', keymaps.replay or '—', 'replay last request'),
     string.format('  %-8s %s', keymaps.edit_source or '—', 'edit request source'),
     string.format('  %-8s %s', keymaps.env or '—', 'select environment'),

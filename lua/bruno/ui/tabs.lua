@@ -55,7 +55,7 @@ local function kv(lines, key, value)
   if not present(text) then
     text = '—'
   end
-  lines[#lines + 1] = string.format('  %-14s %s', key .. ':', tostring(text))
+  lines[#lines + 1] = string.format('  %-10s %s', key .. ':', tostring(text))
 end
 
 ---@param lines string[]
@@ -186,14 +186,6 @@ function M.request_tab(request, env, running, error, result)
   end
   if error then
     kv(lines, 'Error', error)
-  end
-
-  if env and env ~= '' then
-    local resolved = parsers.resolved_url(request, env)
-    if resolved ~= request.url then
-      section(lines, 'RESOLVED URL')
-      lines[#lines + 1] = '  ' .. resolved
-    end
   end
 
   section(lines, 'QUERY PARAMS')

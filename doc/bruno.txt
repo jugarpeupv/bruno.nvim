@@ -51,8 +51,8 @@ Configuration defaults: >lua
       width = 0.45,
       height = 0.35,
       auto_open = true,
-      default_tab = 'request',
-      tabs = { 'request', 'body', 'headers', 'tests', 'scripts', 'timeline', 'raw', 'verbose' },
+      default_tab = 'response',
+      tabs = { 'request', 'response', 'tests', 'scripts', 'raw', 'verbose' },
       keymaps = {
         next_tab = '<Tab>', prev_tab = '<S-Tab>',
         next_response = ')', prev_response = '(',
@@ -160,9 +160,6 @@ Statusline integration: >lua
 :BrunoToggleView                                       *:BrunoToggleView*
         Cycle the workbench tabs.
 
-:BrunoStats                                                 *:BrunoStats*
-        Open the workbench on the Timeline tab.
-
 :BrunoAuth [login|clear|status]                              *:BrunoAuth*
         Acquire (`login`), clear or inspect the OAuth2 token for the current
         request.
@@ -191,7 +188,7 @@ Statusline integration: >lua
 
 The workbench is a single nofile buffer with this top area:
 
-  Request  Body  Headers  Tests  Scripts  Timeline  Raw  [Verbose]
+  Request  [Response]  Tests  Scripts  Raw  Verbose
   GET  http://127.0.0.1:8765/archetypes
   200 OK  ·  1498 ms  ·  15.7 KiB
   Request: 2/3 · Selected env: dev
@@ -207,12 +204,10 @@ currently viewing.
 
 Below it is one pane per tab:
 
-  Request   Method, URL, headers, params, body, scripts, tests and docs.
-  Body      Response status and body in a fenced code block.
-  Headers   Request and response headers.
-  Tests     Bruno test and assertion results.
-  Scripts   Pre-request, after-response and tests scripts with their output.
-  Timeline  Status, timing, size and the CLI summary.
+  Request   Method, URL, params, request headers and body.
+  Response  Response status, headers and body (body in a fenced block).
+  Tests     Test script, console output and test/assertion results.
+  Scripts   Pre-request and after-response scripts with their output.
   Raw       Raw JSON emitted by the Bruno CLI, wrapped in a fenced JSON block.
   Verbose   Executed `bru run` command plus raw CLI stdout/stderr.
   Logs      Optional: in-memory bruno.nvim logs, when added to `ui.tabs`.
@@ -360,7 +355,7 @@ Examples:
   bruno.auth_clear()
   bruno.auth_status()
   bruno.copy_curl()
-  bruno.tab('headers')
+  bruno.tab('response')
 
   -- Detection and environment integration.
   bruno.detect_collection()     -- cached detection for cwd

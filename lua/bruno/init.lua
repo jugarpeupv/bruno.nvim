@@ -400,12 +400,6 @@ function M.setup(opts)
     ui.next_tab(1)
   end, { desc = 'Bruno: cycle workbench tabs' })
 
-  command('BrunoStats', function()
-    local request = current_request()
-    M.open({ request = request })
-    M.tab('timeline')
-  end, { desc = 'Bruno: show request/response stats' })
-
   command('BrunoClose', function()
     M.close()
   end, { desc = 'Bruno: close the workbench' })

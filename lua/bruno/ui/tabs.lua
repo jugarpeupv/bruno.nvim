@@ -134,12 +134,47 @@ local function key_value_lines(entries, separator)
   return lines
 end
 
+---@param headers any
+---@return { name: string, value: string }[]
+local function sorted_headers(headers)
+  if type(headers) ~= 'table' then
+    return {}
+  end
+  local result = {}
+  for name, value in pairs(headers) do
+    if value ~= nil and value ~= vim.NIL and tostring(value) ~= '' then
+      result[#result + 1] = {
+        name = tostring(name),
+        value = type(value) == 'table' and Json.encode(value) or tostring(value),
+      }
+    end
+  end
+  table.sort(result, function(a, b)
+    return a.name:lower() < b.name:lower()
+  end)
+  return result
+end
+
+---@param lines string[]
+---@param headers any
+local function header_lines(lines, headers)
+  local sorted = sorted_headers(headers)
+  if #sorted == 0 then
+    lines[#lines + 1] = '  (none)'
+    return
+  end
+  for _, header in ipairs(sorted) do
+    lines[#lines + 1] = '  ' .. header.name .. ': ' .. header.value
+  end
+end
+
 ---@param request bruno.Request
 ---@param env? string
 ---@param running boolean
 ---@param error? string
+---@param result? bruno.RunResult
 ---@return string[]
-function M.request_tab(request, env, running, error)
+function M.request_tab(request, env, running, error, result)
   local lines = {}
 
   section(lines, 'REQUEST')
@@ -190,9 +225,16 @@ function M.request_tab(request, env, running, error)
   end
 
   section(lines, 'HEADERS')
-  local headers = key_value_lines(request.headers, ': ')
-  for _, line in ipairs(headers) do
-    lines[#lines + 1] = line
+  local sent = request_of(result and result.results[1] or nil)
+  local sent_headers = sent and sorted_headers(sent.headers) or {}
+  if #sent_headers > 0 then
+    for _, header in ipairs(sent_headers) do
+      lines[#lines + 1] = '  ' .. header.name .. ': ' .. header.value
+    end
+  else
+    for _, line in ipairs(key_value_lines(request.headers, ': ')) do
+      lines[#lines + 1] = line
+    end
   end
 
   local body = request.body or { mode = 'none' }
@@ -221,27 +263,6 @@ function M.request_tab(request, env, running, error)
     for _, entry in ipairs(request.vars.res or {}) do
       lines[#lines + 1] = '  → ' .. entry.name .. ' = ' .. entry.value
     end
-  end
-
-  if request.script and (request.script.pre or request.script.post) then
-    if request.script.pre then
-      section(lines, 'PRE-REQUEST SCRIPT')
-      fenced_block(lines, 'javascript', request.script.pre)
-    end
-    if request.script.post then
-      section(lines, 'POST-RESPONSE SCRIPT')
-      fenced_block(lines, 'javascript', request.script.post)
-    end
-  end
-
-  if request.tests then
-    section(lines, 'TESTS')
-    fenced_block(lines, 'javascript', request.tests)
-  end
-
-  if request.docs then
-    section(lines, 'DOCS')
-    raw_block(lines, request.docs)
   end
 
   return lines
@@ -718,8 +739,6 @@ function M.scripts_tab(request, result, running, error)
     lines[#lines + 1] = '```'
   end
 
-  script_section(lines, 'TESTS', request.tests, phases.tests, collect_tests(result, 'testResults'))
-
   if #phases.other > 0 then
     section(lines, 'OTHER OUTPUT')
     append_output(lines, phases.other)
@@ -769,7 +788,7 @@ end
 ---@param running boolean
 ---@param error? string
 ---@return string[]
-function M.body_tab(result, running, error)
+function M.response_tab(result, running, error)
   local lines = {}
 
   if running then
@@ -781,7 +800,7 @@ function M.body_tab(result, running, error)
     return lines
   end
   if not result then
-    return { 'Run the request to see the response body.' }
+    return { 'Run the request to see the response.' }
   end
 
   local first = result.results[1]
@@ -800,6 +819,9 @@ function M.body_tab(result, running, error)
   kv(lines, 'Time', M.ms(response.responseTime or response.duration))
   kv(lines, 'Size', M.bytes(response.size or #body))
   kv(lines, 'URL', response.url or (request_of(first) or {}).url)
+
+  section(lines, 'HEADERS')
+  header_lines(lines, response.headers)
 
   if present(first.error) then
     section(lines, 'ERROR')
@@ -821,80 +843,6 @@ function M.body_tab(result, running, error)
   return lines
 end
 
----@param headers any
----@return { name: string, value: string }[]
-local function sorted_headers(headers)
-  if type(headers) ~= 'table' then
-    return {}
-  end
-  local result = {}
-  for name, value in pairs(headers) do
-    if value ~= nil and value ~= vim.NIL and tostring(value) ~= '' then
-      result[#result + 1] = {
-        name = tostring(name),
-        value = type(value) == 'table' and Json.encode(value) or tostring(value),
-      }
-    end
-  end
-  table.sort(result, function(a, b)
-    return a.name:lower() < b.name:lower()
-  end)
-  return result
-end
-
----@param result? bruno.RunResult
----@param request bruno.Request
----@return string[]
-function M.headers_tab(result, request)
-  local lines = {}
-  local first = result and result.results[1]
-  local req = request_of(first)
-  local res = response_of(first)
-
-  section(lines, 'REQUEST HEADERS')
-  local request_headers = req and sorted_headers(req.headers) or {}
-  if #request_headers == 0 then
-    for _, entry in ipairs(request.headers or {}) do
-      if entry.enabled then
-        request_headers[#request_headers + 1] = { name = entry.name, value = entry.value }
-      end
-    end
-  end
-  if #request_headers == 0 then
-    lines[#lines + 1] = '  (none)'
-  else
-    for _, header in ipairs(request_headers) do
-      lines[#lines + 1] = '  ' .. header.name .. ': ' .. header.value
-    end
-  end
-
-  section(lines, 'RESPONSE HEADERS')
-  local response_headers = res and sorted_headers(res.headers) or {}
-  if #response_headers == 0 then
-    lines[#lines + 1] = '  (none)'
-  else
-    for _, header in ipairs(response_headers) do
-      lines[#lines + 1] = '  ' .. header.name .. ': ' .. header.value
-    end
-  end
-
-  return lines
-end
-
----@param tests? bruno.TestResult[]
----@param lines string[]
-local function test_lines(tests, lines)
-  for _, test in ipairs(tests or {}) do
-    local marker = test.status == 'pass' and '✓' or (test.status == 'skipped' and '•' or '✗')
-    lines[#lines + 1] = string.format('  %s %s', marker, test.description or '(unnamed test)')
-    if present(test.error) then
-      for _, line in ipairs(vim.split(tostring(test.error), '\n', { plain = true })) do
-        lines[#lines + 1] = '      ' .. line
-      end
-    end
-  end
-end
-
 ---@param assertions? bruno.AssertionResult[]
 ---@param lines string[]
 local function assertion_lines(assertions, lines)
@@ -910,11 +858,12 @@ local function assertion_lines(assertions, lines)
   end
 end
 
+---@param request bruno.Request
 ---@param result? bruno.RunResult
 ---@param running boolean
 ---@param error? string
 ---@return string[]
-function M.tests_tab(result, running, error)
+function M.tests_tab(request, result, running, error)
   local lines = {}
 
   if running then
@@ -929,10 +878,10 @@ function M.tests_tab(result, running, error)
     return { 'No test results yet.' }
   end
 
+  local phases = parse_script_output(result.stdout)
+  script_section(lines, 'TESTS', request and request.tests, phases.tests, collect_tests(result, 'testResults'))
+
   for index, item in ipairs(result.results) do
-    if index > 1 then
-      lines[#lines + 1] = ''
-    end
     local name = item.name
     if name == nil or name == vim.NIL or name == '' then
       name = item.path
@@ -943,91 +892,22 @@ function M.tests_tab(result, running, error)
     if name == nil or name == vim.NIL or name == '' then
       name = 'request ' .. index
     end
-    section(lines, 'RESULT ' .. index .. ': ' .. name)
-    kv(lines, 'Status', item.status or '—')
-    kv(lines, 'Runner', present(item.error) and item.error or '(no runner error)')
 
-    local tests = {}
-    vim.list_extend(tests, item.testResults or {})
-    vim.list_extend(tests, item.preRequestTestResults or {})
-    vim.list_extend(tests, item.postResponseTestResults or {})
-    if #tests > 0 then
-      lines[#lines + 1] = ''
-      lines[#lines + 1] = '  TESTS'
-      test_lines(tests, lines)
+    local assertions = item.assertionResults or {}
+    if present(item.error) or #assertions > 0 then
+      if #lines > 0 then
+        lines[#lines + 1] = ''
+      end
+      section(lines, 'RESULT ' .. index .. ': ' .. name)
+      if present(item.error) then
+        kv(lines, 'Runner', tostring(item.error))
+      end
+      if #assertions > 0 then
+        lines[#lines + 1] = ''
+        lines[#lines + 1] = '  ASSERTIONS'
+        assertion_lines(assertions, lines)
+      end
     end
-
-    if #(item.assertionResults or {}) > 0 then
-      lines[#lines + 1] = ''
-      lines[#lines + 1] = '  ASSERTIONS'
-      assertion_lines(item.assertionResults, lines)
-    end
-
-    if #tests == 0 and #(item.assertionResults or {}) == 0 then
-      lines[#lines + 1] = '  (no tests or assertions)'
-    end
-  end
-
-  return lines
-end
-
----@param result? bruno.RunResult
----@param running boolean
----@param error? string
----@return string[]
-function M.timeline_tab(result, running, error)
-  local lines = {}
-
-  if running then
-    return { 'Request in progress…' }
-  end
-  if error then
-    section(lines, 'ERROR')
-    lines[#lines + 1] = error
-    return lines
-  end
-  if not result then
-    return { 'Run the request to see timing information.' }
-  end
-
-  for index, item in ipairs(result.results) do
-    if index > 1 then
-      lines[#lines + 1] = ''
-    end
-    local req = request_of(item) or {}
-    local res = response_of(item) or {}
-    local name = item.name
-    if name == nil or name == vim.NIL or name == '' then
-      name = item.path
-    end
-    if name == nil or name == vim.NIL or name == '' then
-      name = item.filename
-    end
-    if name == nil or name == vim.NIL or name == '' then
-      name = 'request ' .. index
-    end
-    local status_text = present(res.statusText) and (' ' .. tostring(res.statusText)) or ''
-
-    section(lines, 'REQUEST ' .. index .. ': ' .. name)
-    kv(lines, 'Method', req.method)
-    kv(lines, 'URL', req.url)
-    kv(lines, 'Status', tostring(present(res.status) and res.status or '—') .. status_text)
-    kv(lines, 'Response', M.ms(res.responseTime or res.duration))
-    kv(lines, 'Run', M.ms(item.runDuration and item.runDuration * 1000))
-    kv(lines, 'Size', M.bytes(res.size))
-    kv(lines, 'Tests', string.format('%d', #(item.testResults or {})))
-    kv(lines, 'Assertions', string.format('%d', #(item.assertionResults or {})))
-  end
-
-  if result.summary then
-    local summary = result.summary or {}
-    section(lines, 'SUMMARY')
-    kv(lines, 'Requests', summary.totalRequests or '—')
-    kv(lines, 'Passed', summary.passedRequests or '—')
-    kv(lines, 'Failed', summary.failedRequests or '—')
-    kv(lines, 'Skipped', summary.skippedRequests or '—')
-    kv(lines, 'Tests', string.format('%s/%s', summary.passedTests or 0, summary.totalTests or 0))
-    kv(lines, 'Assertions', string.format('%s/%s', summary.passedAssertions or 0, summary.totalAssertions or 0))
   end
 
   return lines

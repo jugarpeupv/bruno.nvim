@@ -21,8 +21,8 @@ app.
   `cwd`.
 - Automatic environment selection when a collection has exactly one
   environment.
-- Tabbed response workbench: **Request**, **Body**, **Headers**, **Tests**,
-  **Timeline** and **Raw**.
+- Tabbed response workbench: **Request**, **Response**, **Tests**,
+  **Scripts**, **Raw** and **Verbose**.
 - Request and environment pickers with no mandatory picker dependency.
 - Environment switching per collection and a statusline API for lualine or
   other statusline plugins.
@@ -99,8 +99,8 @@ require('bruno').setup({
     -- Open the workbench automatically when a request starts.
     auto_open = true,
 
-    default_tab = 'request',
-    tabs = { 'request', 'body', 'headers', 'tests', 'scripts', 'timeline', 'raw', 'verbose' },
+    default_tab = 'response',
+    tabs = { 'request', 'response', 'tests', 'scripts', 'raw', 'verbose' },
 
     -- Set any value to false to disable that keymap.
     keymaps = {
@@ -244,7 +244,6 @@ bruno.refresh_detection()   -- forces a fresh scan
 | `:BrunoSearch` | Compatibility alias for `:BrunoRequests`. |
 | `:BrunoInspect` | Open the workbench on the Request tab. |
 | `:BrunoToggleView` | Cycle workbench tabs. |
-| `:BrunoStats` | Open the workbench on the Timeline tab. |
 | `:BrunoAuth [login\|clear\|status]` | Acquire, clear or inspect the OAuth2 token. |
 | `:BrunoAuthClear` | Clear the cached token for the current request. |
 | `:BrunoClearTokens` | Remove every cached OAuth2 token. |
@@ -258,7 +257,7 @@ bruno.refresh_detection()   -- forces a fresh scan
 The workbench buffer layout is:
 
 ```text
-Request  Body  Headers  Tests  Scripts  Timeline  Raw  [Verbose]
+Request  [Response]  Tests  Scripts  Raw  Verbose
 GET  http://127.0.0.1:8765/archetypes
 200 OK  ·  1498 ms  ·  15.7 KiB
 Request: 2/3 · Selected env: dev
@@ -288,11 +287,14 @@ as fallback. If you use `render-markdown.nvim`, add `bruno_ui` to its own `ft`
 and `file_types` configuration to render the workbench. Sections
 are Markdown headings (`## ...`); use `za` on a heading to fold its section.
 
-The Body pane wraps the response payload in a fenced code block (JSON, XML,
-HTML or text based on the content type), and the Raw pane wraps the CLI JSON in
+The Response pane shows the response status, headers (as a `HEADERS` section)
+and body, wrapping the payload in a fenced code block (JSON, XML, HTML or text
+based on the content type); the Request pane shows the method, URL, params,
+request headers and body. The Raw pane wraps the CLI JSON in
 a `json` fence, so syntax highlighting is enabled. The Scripts pane groups the
-pre-request, after-response and tests scripts with their code, console output
-and script test results; the Verbose pane shows the executed `bru run` command
+pre-request and after-response scripts with their code, console output and
+script test results; the Tests pane shows the test script, its console output
+and the test results; the Verbose pane shows the executed `bru run` command
 and the raw CLI stdout/stderr. A `logs` tab is still available if you add it to
 `ui.tabs`; it shows the in-memory plugin log and refreshes live as messages are
 appended.
@@ -312,15 +314,15 @@ All keymaps are buffer-local to the workbench and configurable in
 | `<CR>` on the tab bar | Open the tab under the cursor |
 | `1` … `8` | Jump to a tab |
 | `R` | Run the current request |
-| `r` | Replay the last request |
-| `e` | Edit the request source |
-| `ge` | Pick an environment |
-| `p` | Pick a request |
-| `a` | Acquire/login an OAuth2 token |
-| `A` | Clear the cached OAuth2 token |
-| `c` | Copy as cURL |
-| `y` | Yank the response body |
-| `Y` | Yank the raw result |
+| `R` | Replay the last request |
+| `ge` | Edit the request source |
+| `gE` | Pick an environment |
+| `gp` | Pick and run a request |
+| `ga` | Acquire/login an OAuth2 token |
+| `gA` | Clear the cached OAuth2 token |
+| `C` | Copy as cURL |
+| `cb` | Yank the response body |
+| `cr` | Yank the raw result |
 | `K` | Inspect the `{{variable}}` under the cursor |
 | `?` / `g?` | Help |
 | `q` | Close the workbench |
@@ -501,7 +503,7 @@ bruno.pick_request()        -- picks and runs a request
 bruno.auth()                -- acquire/login OAuth2
 bruno.auth_clear()
 bruno.copy_curl()
-bruno.tab('headers')
+bruno.tab('response')
 
 -- Collection / environment integration.
 bruno.detect_collection()   -- cached detection for cwd

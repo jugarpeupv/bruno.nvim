@@ -1,0 +1,45 @@
+info:
+  name: Download Image
+  type: http
+  seq: 1
+http:
+  method: GET
+  url: https://httpbin.org/image/png
+  headers:
+    - name: Accept
+      value: image/png
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const contentType = res.getHeader('content-type') || '';
+        const size = res.getSize().body;
+
+        // Expose the facts as runtime variables so they show up in the
+        // workbench Scripts tab (ENVIRONMENT VARIABLES diff).
+        bru.setVar('CONTENT_TYPE', contentType);
+        bru.setVar('IMAGE_BYTES', size);
+
+        console.log('content-type:', contentType);
+        console.log('bytes:', size);
+    - type: tests
+      code: |-
+        test('responds with 200 OK', function() {
+          expect(res.getStatus()).to.equal(200);
+        });
+
+        test('content type is image/png', function() {
+          expect(res.getHeader('content-type')).to.include('image/png');
+        });
+
+        test('body is not empty', function() {
+          expect(res.getSize().body).to.be.above(0);
+        });
+docs:
+  content: |
+    Downloads a PNG from https://httpbin.org/image/png (public, no auth).
+
+    Useful for exercising the workbench with a binary response:
+    the Body tab shows the raw bytes, the Headers tab shows the
+    `content-type: image/png` header, and the Tests tab reports the
+    assertions above.

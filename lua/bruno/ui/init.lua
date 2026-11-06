@@ -11,11 +11,9 @@ local M = {}
 
 local TAB_LABELS = {
   request = 'Request',
-  body = 'Body',
-  headers = 'Headers',
+  response = 'Response',
   tests = 'Tests',
   scripts = 'Scripts',
-  timeline = 'Timeline',
   raw = 'Raw',
   logs = 'Logs',
   verbose = 'Verbose',
@@ -297,17 +295,13 @@ local function build_content(bufnr, env)
   end
 
   if ui_state.tab == 'request' then
-    return tabs.request_tab(request, env, ui_state.running, ui_state.error)
-  elseif ui_state.tab == 'body' then
-    return tabs.body_tab(ui_state.result, ui_state.running, ui_state.error)
-  elseif ui_state.tab == 'headers' then
-    return tabs.headers_tab(ui_state.result, request)
+    return tabs.request_tab(request, env, ui_state.running, ui_state.error, ui_state.result)
+  elseif ui_state.tab == 'response' then
+    return tabs.response_tab(ui_state.result, ui_state.running, ui_state.error)
   elseif ui_state.tab == 'tests' then
-    return tabs.tests_tab(ui_state.result, ui_state.running, ui_state.error)
+    return tabs.tests_tab(request, ui_state.result, ui_state.running, ui_state.error)
   elseif ui_state.tab == 'scripts' then
     return tabs.scripts_tab(request, ui_state.result, ui_state.running, ui_state.error)
-  elseif ui_state.tab == 'timeline' then
-    return tabs.timeline_tab(ui_state.result, ui_state.running, ui_state.error)
   elseif ui_state.tab == 'raw' then
     return tabs.raw_tab(ui_state.result, ui_state.running, ui_state.error)
   elseif ui_state.tab == 'verbose' then
@@ -759,7 +753,7 @@ function M.open(opts)
     ui_state.error = state.last_error
   end
   if not opts.preserve_result and ui_state.result and ui_state.tab == 'request' then
-    ui_state.tab = 'body'
+    ui_state.tab = 'response'
   end
 
   if valid_win(M.win) and vim.api.nvim_win_get_buf(M.win) ~= bufnr then

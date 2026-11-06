@@ -17,12 +17,17 @@ describe('ui.workbench', function()
     truthy(bufnr)
 
     local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-    match(lines[1], '%[Request%]')
+    match(lines[1], '%[Response%]')
+    match(lines[1], 'Request')
     match(lines[2], 'POST')
     match(lines[2], 'http://127%.0%.0%.1:8765/users')
     match(lines[4], '^Request: %d+/%d+ · Selected env: Local')
-    match(lines[6], '^## REQUEST')
+    eq('response', ui.state(bufnr).tab)
     eq('', vim.wo[ui.win].winbar)
+
+    ui.select_tab('request')
+    lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+    match(lines[6], '^## REQUEST')
 
     local env_mod = require('bruno.env')
     env_mod.clear(request.root)
@@ -34,9 +39,9 @@ describe('ui.workbench', function()
     lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
     match(lines[4], '^Request: %d+/%d+ · Selected env: Local')
 
-    ui.select_tab('body')
+    ui.select_tab('response')
     lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-    match(table.concat(lines, '\n'), 'Run the request to see the response body')
+    match(table.concat(lines, '\n'), 'Run the request to see the response')
 
     local result = {
       request = request,
@@ -89,13 +94,13 @@ describe('ui.workbench', function()
     lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
     match(table.concat(lines, '\n'), '✓ ok')
 
-    ui.select_tab('headers')
+    ui.select_tab('request')
     lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-    match(table.concat(lines, '\n'), 'Content%-Type')
+    match(table.concat(lines, '\n'), '[Cc]ontent%-[Tt]ype')
 
-    ui.select_tab('timeline')
+    ui.select_tab('response')
     lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-    match(table.concat(lines, '\n'), 'SUMMARY')
+    match(table.concat(lines, '\n'), '[Cc]ontent%-[Tt]ype')
 
     ui.select_tab('raw')
     lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
@@ -171,7 +176,7 @@ describe('ui.workbench', function()
     }
 
     ui.show_result(result)
-    ui.select_tab('body')
+    ui.select_tab('response')
 
     local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
     local namespace = vim.api.nvim_get_namespaces()['bruno-ui']
@@ -210,13 +215,6 @@ describe('ui.workbench', function()
     local url_row = row_starting('URL:')
     eq('BrunoUrl', hl_at(url_row, 'http://127.0.0.1:8765/users'))
 
-    ui.select_tab('timeline')
-    lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-    local method_row = row_starting('Method:')
-    eq('BrunoMethod', hl_at(method_row, 'POST'))
-    local timeline_url_row = row_starting('URL:')
-    eq('BrunoUrl', hl_at(timeline_url_row, 'http://127.0.0.1:8765/users'))
-
     ui.destroy()
   end)
 
@@ -239,10 +237,10 @@ describe('ui.workbench', function()
     truthy(mapping.callback, '<CR> mapping is missing')
 
     local tabline = vim.api.nvim_buf_get_lines(bufnr, 0, 1, false)[1]
-    local body_col = assert(tabline:find('Body', 1, true)) - 1
-    vim.api.nvim_win_set_cursor(ui.win, { 1, body_col })
+    local response_col = assert(tabline:find('Response', 1, true)) - 1
+    vim.api.nvim_win_set_cursor(ui.win, { 1, response_col })
     mapping.callback()
-    eq('body', ui.state(bufnr).tab)
+    eq('response', ui.state(bufnr).tab)
 
     local request_col = assert(tabline:find('Request', 1, true)) - 1
     vim.api.nvim_win_set_cursor(ui.win, { 1, request_col })
@@ -309,7 +307,7 @@ describe('ui.workbench', function()
     ui.show_result(result(201, 2))
     lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
     match(lines[4], 'Request: 3/3')
-    ui.select_tab('body')
+    ui.select_tab('response')
     lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
     match(table.concat(lines, '\n'), '"run": 2')
 
@@ -410,9 +408,6 @@ describe('ui.workbench', function()
     match(text, '## AFTER%-RESPONSE SCRIPT')
     match(text, 'POST%-CONSOLE%-LOG')
     match(text, 'post passes')
-    match(text, '## TESTS')
-    match(text, 'TEST%-CONSOLE%-LOG')
-    match(text, 'tests pass')
     match(text, '## STDERR')
     match(text, 'POST%-CONSOLE%-WARN')
 
@@ -421,6 +416,14 @@ describe('ui.workbench', function()
     match(text, '%- token = old')
     match(text, '%+ token = env%-token')
     match(text, '%+ apiKey')
+
+    ui.select_tab('tests')
+    lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+    text = table.concat(lines, '\n')
+    match(text, '## TESTS')
+    match(text, '### Script')
+    match(text, 'TEST%-CONSOLE%-LOG')
+    match(text, 'tests pass')
 
     ui.select_tab('verbose')
     lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
@@ -491,7 +494,7 @@ describe('ui.workbench', function()
     require('bruno').setup({
       notify = false,
       default_env = nil,
-      ui = { auto_open = true, default_tab = 'headers' },
+      ui = { auto_open = true, default_tab = 'tests' },
     })
     require('bruno.state').reset()
     require('bruno.env').reset()
@@ -502,7 +505,7 @@ describe('ui.workbench', function()
     ui.before_run(request)
     local bufnr = ui.buf
     truthy(bufnr)
-    eq('headers', ui.state(bufnr).tab)
+    eq('tests', ui.state(bufnr).tab)
 
     ui.show_result({
       request = request,
@@ -532,7 +535,7 @@ describe('ui.workbench', function()
       env = 'Local',
     })
 
-    eq('headers', ui.state(bufnr).tab)
+    eq('tests', ui.state(bufnr).tab)
 
     ui.destroy()
   end)
@@ -551,11 +554,11 @@ describe('ui.workbench', function()
     local bufnr = ui.open({ request = request })
     truthy(bufnr)
 
-    ui.select_tab('headers')
-    eq('headers', ui.state(bufnr).tab)
+    ui.select_tab('tests')
+    eq('tests', ui.state(bufnr).tab)
 
     ui.before_run(request)
-    eq('headers', ui.state(bufnr).tab)
+    eq('tests', ui.state(bufnr).tab)
 
     ui.show_result({
       request = request,
@@ -585,7 +588,7 @@ describe('ui.workbench', function()
       env = 'Local',
     })
 
-    eq('headers', ui.state(bufnr).tab)
+    eq('tests', ui.state(bufnr).tab)
 
     ui.destroy()
   end)
@@ -594,7 +597,7 @@ describe('ui.workbench', function()
     require('bruno').setup({
       notify = false,
       default_env = nil,
-      ui = { auto_open = false },
+      ui = { auto_open = false, default_tab = 'request' },
     })
     require('bruno.state').reset()
     require('bruno.env').reset()
@@ -632,6 +635,7 @@ describe('ui.workbench', function()
     local request = parsers.parse_request(root .. '/bru-collection/requests/simple.bru')
     local bufnr = ui.open({ request = request })
     truthy(bufnr)
+    ui.select_tab('request')
 
     local target_line
     local target_col

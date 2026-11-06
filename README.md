@@ -26,6 +26,10 @@ app.
 - Request and environment pickers with no mandatory picker dependency.
 - Environment switching per collection and a statusline API for lualine or
   other statusline plugins.
+- Session runtime variables: simple `bru.setVar` assignments from after-response
+  scripts are captured and injected into later runs with `--env-var`, so a token
+  stored by a login request is available to subsequent requests within the same
+  Neovim session (like the Bruno desktop app).
 - Markdown workbench (`render-markdown.nvim` compatible) with foldable sections
   and `(` / `)` navigation between requests.
 - OAuth2:
@@ -208,6 +212,33 @@ Environment selection is per collection and lives in memory:
 The selected environment is shown in the workbench metadata line, for example
 `Request: 2/3 · Selected env: dev`, and in the Request tab.
 
+### Runtime variables between runs
+
+Bruno's `bru.setVar` values only live inside a single `bru run` process. Because
+the plugin runs each request as its own CLI invocation, a token stored by a login
+request would normally be lost before the next request runs.
+
+To mirror the Bruno desktop app's session behavior, the plugin captures simple
+`bru.setVar("NAME", expr)` / `bru.setEnvVar("NAME", expr)` assignments from a
+request's after-response script, evaluates them against the actual response
+(`res.getStatus()`, `res.getBody().field`, literals) and keeps them in memory per
+collection + environment. They are injected into later runs as `--env-var`
+arguments, so `{{NAME}}` resolves in subsequent requests.
+
+For example, a login script like:
+
+```js
+bru.setVar("BRUNO_ACCESS_TOKEN", res.getBody().accessToken);
+```
+
+makes `{{BRUNO_ACCESS_TOKEN}}` available to the next request run in the same
+Neovim session. Use `:BrunoClearVars` to forget the captured values.
+
+Captured values are listed in the Request tab under `## RUNTIME VARS`; names
+that look like authentication material (`TOKEN`, `SECRET`, `PASSWORD`, ...) are
+masked as `********`. Press `K` on a row to reveal the full value, or run
+`:BrunoRuntimeVars` to jump straight to that section.
+
 ### lualine / statusline integration
 
 ```lua
@@ -253,6 +284,8 @@ bruno.refresh_detection()   -- forces a fresh scan
 | `:BrunoAuth [login\|clear\|status]` | Acquire, clear or inspect the OAuth2 token. |
 | `:BrunoAuthClear` | Clear the cached token for the current request. |
 | `:BrunoClearTokens` | Remove every cached OAuth2 token. |
+| `:BrunoClearVars` | Forget captured runtime variables. |
+| `:BrunoRuntimeVars` | Show captured runtime variables in the Request tab. |
 | `:BrunoAuthStatus` | Show OAuth2 cache status. |
 | `:BrunoCopy` / `:BrunoCopyCurl` | Copy the request as cURL. |
 | `:BrunoTab [name\|index]` | Select a workbench tab. |
@@ -296,7 +329,10 @@ are Markdown headings (`## ...`); use `za` on a heading to fold its section.
 The Response pane shows the response status, headers (as a `HEADERS` section)
 and body, wrapping the payload in a fenced code block (JSON, XML, HTML or text
 based on the content type); the Request pane shows the method, URL, params,
-request headers and body. The Raw pane wraps the CLI JSON in
+request headers, body and captured runtime variables. If the CLI redacts a sent
+`Authorization` header (`Bearer ********`), the configured template is shown
+instead (for example `Bearer {{BRUNO_ACCESS_TOKEN}}`), so `K` can reveal its
+value. The Raw pane wraps the CLI JSON in
 a `json` fence, so syntax highlighting is enabled. The Scripts pane groups the
 pre-request and after-response scripts with their code, console output and
 script test results; the Tests pane shows the test script, its console output
@@ -306,8 +342,9 @@ and the raw CLI stdout/stderr. A `logs` tab is still available if you add it to
 appended.
 
 Press `K` with the cursor over a `{{VARIABLE}}` to show its resolved value in a
-floating window. Press `K` again to focus the hover window; `q`, `Esc` or `K`
-inside it closes it.
+floating window. This also works on the runtime variable rows in the Request tab
+(`NAME = ******`), where it reveals the full value and its source. Press `K`
+again to focus the hover window; `q`, `Esc` or `K` inside it closes it.
 
 Press `<CR>` with the cursor in the `BODY` section of the Response tab to open
 the body action picker:

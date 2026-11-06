@@ -625,6 +625,146 @@ describe('ui.workbench', function()
     ui.destroy()
   end)
 
+  it('shows the bearer template instead of a redacted Authorization header', function()
+    require('bruno').setup({
+      notify = false,
+      default_env = nil,
+      ui = { auto_open = false },
+    })
+    require('bruno.state').reset()
+    require('bruno.env').reset()
+
+    local request = parsers.parse_request(root .. '/bru-collection/requests/simple.bru')
+    local ui = require('bruno.ui')
+    local bufnr = ui.open({ request = request })
+    truthy(bufnr)
+
+    ui.select_tab('request')
+    local text = table.concat(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false), '\n')
+    match(text, 'Authorization: Bearer {{token}}')
+
+    ui.show_result({
+      request = request,
+      raw = '{}',
+      data = {},
+      results = {
+        {
+          name = 'Simple Request',
+          status = 'pass',
+          request = {
+            method = 'POST',
+            url = 'http://127.0.0.1:8765/users',
+            headers = { Authorization = 'Bearer ********', Accept = 'application/json' },
+          },
+          response = { status = 200, statusText = 'OK', headers = {}, data = {}, responseTime = 1, size = 2 },
+          testResults = {},
+          assertionResults = {},
+        },
+      },
+      summary = {},
+      stdout = '',
+      stderr = '',
+      code = 0,
+      env = 'Local',
+    })
+
+    ui.select_tab('request')
+    local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+    text = table.concat(lines, '\n')
+    match(text, 'Authorization: Bearer {{token}}')
+    falsy(text:find('Authorization: Bearer %*'))
+
+    local target_row
+    local target_col
+    for index, line in ipairs(lines) do
+      local start_col = line:find('{{token}}', 1, true)
+      if start_col then
+        target_row = index
+        target_col = start_col - 1
+        break
+      end
+    end
+    truthy(target_row, 'Authorization template is missing')
+
+    vim.api.nvim_set_current_win(ui.win)
+    vim.api.nvim_win_set_cursor(ui.win, { target_row, target_col })
+
+    local hover = require('bruno.ui.hover')
+    local hover_win = hover.show(request)
+    truthy(hover_win, 'hover window did not open')
+    local hover_text = table.concat(vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(hover_win), 0, -1, false), '\n')
+    match(hover_text, 'env%-token')
+
+    hover.close()
+    ui.destroy()
+  end)
+
+  it('renders and reveals captured runtime variables', function()
+    require('bruno').setup({
+      notify = false,
+      default_env = nil,
+      ui = { auto_open = false },
+    })
+    require('bruno.state').reset()
+    require('bruno.env').reset()
+
+    local session = require('bruno.session_vars')
+    session.reset()
+    local request = parsers.parse_request(root .. '/bru-collection/requests/simple.bru')
+    session.remember(
+      {
+        root = request.root,
+        path = request.path,
+        script = { post = 'bru.setVar("BRUNO_ACCESS_TOKEN", res.getBody().accessToken);' },
+      },
+      'Local',
+      {
+        results = { { response = { status = 200, data = { accessToken = 'secret-token' } } } },
+        raw = '',
+        data = {},
+        summary = {},
+        stdout = '',
+        stderr = '',
+        code = 0,
+        env = 'Local',
+      }
+    )
+
+    local ui = require('bruno.ui')
+    local bufnr = ui.open({ request = request })
+    ui.select_tab('request')
+    local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+    local text = table.concat(lines, '\n')
+    match(text, '## RUNTIME VARS')
+    match(text, 'BRUNO_ACCESS_TOKEN = %*%*%*%*%*%*%*%*')
+
+    local target_row
+    local target_col
+    for index, line in ipairs(lines) do
+      local start_col = line:find('BRUNO_ACCESS_TOKEN', 1, true)
+      if start_col then
+        target_row = index
+        target_col = start_col - 1
+        break
+      end
+    end
+    truthy(target_row, 'runtime variable row is missing')
+
+    vim.api.nvim_set_current_win(ui.win)
+    vim.api.nvim_win_set_cursor(ui.win, { target_row, target_col })
+
+    local hover = require('bruno.ui.hover')
+    local hover_win = hover.show(request)
+    truthy(hover_win, 'hover window did not open')
+    local hover_text = table.concat(vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(hover_win), 0, -1, false), '\n')
+    match(hover_text, 'secret%-token')
+    match(hover_text, 'runtime variable')
+
+    hover.close()
+    ui.destroy()
+    session.reset()
+  end)
+
   it('inspects variables and focuses the hover window', function()
     require('bruno').setup({
       notify = false,

@@ -19,6 +19,20 @@ local function is_set(value)
   return value ~= nil and value ~= ''
 end
 
+---@return boolean
+local function in_runtime_section()
+  local win = vim.api.nvim_get_current_win()
+  local row = vim.api.nvim_win_get_cursor(win)[1]
+  local lines = vim.api.nvim_buf_get_lines(0, 0, math.max(row - 1, 0), false)
+  for index = #lines, 1, -1 do
+    local line = lines[index]
+    if line:match('^#+%s') then
+      return line:match('^##%s+RUNTIME VARS%s*$') ~= nil
+    end
+  end
+  return false
+end
+
 ---@return string?
 local function variable_under_cursor()
   local line = vim.api.nvim_get_current_line()
@@ -28,7 +42,7 @@ local function variable_under_cursor()
   while true do
     local start_col, end_col = line:find('{{.-}}', init)
     if not start_col then
-      return nil
+      break
     end
 
     if cursor_col >= start_col - 1 and cursor_col < end_col then
@@ -39,6 +53,16 @@ local function variable_under_cursor()
     end
     init = end_col + 1
   end
+
+  -- Bare `NAME = value` rows in the RUNTIME VARS section.
+  if in_runtime_section() then
+    local name = line:match('^%s*([%w_%.-]+)%s*=')
+    if name then
+      return name
+    end
+  end
+
+  return nil
 end
 
 ---@param request? bruno.Request
@@ -60,11 +84,26 @@ end
 ---@return string[]
 local function build_lines(request, name)
   local value, environment = resolve_variable(request, name)
-  local lines = {
-    '{{' .. name .. '}}',
-    '',
-    'Environment: ' .. (environment or '(none)'),
-  }
+  local session = require('bruno.session_vars')
+  local runtime = request and session.get(request.root, environment) or {}
+  local runtime_value = runtime[name]
+
+  local lines = { '{{' .. name .. '}}', '' }
+
+  if runtime_value ~= nil then
+    lines[#lines + 1] = 'Source: runtime variable (this session)'
+    if environment and environment ~= '' then
+      lines[#lines + 1] = 'Environment: ' .. environment
+    end
+    lines[#lines + 1] = ''
+    lines[#lines + 1] = 'Value:'
+    for _, line in ipairs(vim.split(runtime_value, '\n', { plain = true })) do
+      lines[#lines + 1] = line
+    end
+    return lines
+  end
+
+  lines[#lines + 1] = 'Environment: ' .. (environment or '(none)')
 
   lines[#lines + 1] = ''
   lines[#lines + 1] = 'Value:'

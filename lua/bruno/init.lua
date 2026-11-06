@@ -400,6 +400,15 @@ function M.setup(opts)
     ui.next_tab(1)
   end, { desc = 'Bruno: cycle workbench tabs' })
 
+  command('BrunoClearVars', function()
+    require('bruno.session_vars').forget()
+    log.notify('Bruno: cleared captured runtime variables', 'info')
+  end, { desc = 'Bruno: clear captured runtime variables' })
+
+  command('BrunoRuntimeVars', function()
+    require('bruno.ui').show_runtime_vars()
+  end, { desc = 'Bruno: show captured runtime variables' })
+
   command('BrunoClose', function()
     M.close()
   end, { desc = 'Bruno: close the workbench' })

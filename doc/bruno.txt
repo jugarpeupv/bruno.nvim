@@ -109,8 +109,8 @@ configuration:
         Clear the `cwd` detection cache and scan again. Use this after
         creating, moving or deleting a collection.           *:BrunoDetect!*
 
-The request list used by `}` / `{` is refreshed by |:BrunoDetect!| and by
-|:BrunoRequests|.
+The request list used by the picker is refreshed by |:BrunoDetect!| and by
+|:BrunoRequests| (or `gp` in the workbench).
 
 Environment selection order:
 
@@ -121,6 +121,21 @@ Environment selection order:
 
 The selected environment is shown in the workbench metadata line, for example
 `Request: 2/3 · Selected env: dev`, and in the Request tab.
+
+Runtime variables between runs:
+Bruno's `bru.setVar` values only live inside one `bru run` process. The plugin
+runs each request separately, so it captures simple
+`bru.setVar("NAME", expr)` / `bru.setEnvVar("NAME", expr)` assignments from the
+after-response script, evaluates them against the response (`res.getStatus()`,
+`res.getBody().field`, literals) and keeps them in memory per collection +
+environment. They are injected into later runs with `--env-var`, so `{{NAME}}`
+resolves in subsequent requests during the same Neovim session. Use
+|:BrunoClearVars| to forget them.
+
+Captured values appear in the Request tab under `## RUNTIME VARS`. Names that
+look like authentication material (`TOKEN`, `SECRET`, `PASSWORD`, ...) are
+masked as `********`; press `K` on a row to reveal the value, or use
+|:BrunoRuntimeVars| to jump to that section.
 
 Statusline integration: >lua
   require('bruno').current_environment()  -- "local" or nil
@@ -173,6 +188,12 @@ Statusline integration: >lua
 :BrunoClearTokens                                   *:BrunoClearTokens*
         Remove every cached OAuth2 token, forcing a full re-login.
 
+:BrunoClearVars                                       *:BrunoClearVars*
+        Forget the runtime variables captured from after-response scripts.
+
+:BrunoRuntimeVars                                 *:BrunoRuntimeVars*
+        Open the Request tab on the captured runtime variables.
+
 :BrunoAuthStatus                                       *:BrunoAuthStatus*
         Show the cached OAuth2 status.
 
@@ -207,7 +228,9 @@ currently viewing.
 
 Below it is one pane per tab:
 
-  Request   Method, URL, params, request headers and body.
+  Request   Method, URL, params, request headers, body and runtime vars.
+            A redacted `Authorization` header is shown with its configured
+            `{{VARIABLE}}` template so `K` can reveal the value.
   Response  Response status, headers and body (body in a fenced block).
   Tests     Test script, console output and test/assertion results.
   Scripts   Pre-request and after-response scripts with their output.
@@ -231,8 +254,9 @@ and `file_types` configuration to render the workbench. Sections are Markdown
 headings (`## ...`); use `za` on a heading to fold its section.
 
 Press `K` with the cursor over a `{{VARIABLE}}` to show its resolved value in a
-floating window. Press `K` again to focus the hover window; `q`, `Esc` or `K`
-inside it closes it.
+floating window. It also works on the `NAME = ******` rows of the RUNTIME VARS
+section, revealing the full value and marking it as a runtime variable. Press
+`K` again to focus the hover window; `q`, `Esc` or `K` inside it closes it.
 
 Press `<CR>` with the cursor in the `BODY` section of the Response tab to open
 the body action picker:

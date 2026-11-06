@@ -4,6 +4,7 @@
 :BrunoAuthStatus	bruno.txt	/*:BrunoAuthStatus*
 :BrunoCancel	bruno.txt	/*:BrunoCancel*
 :BrunoClearTokens	bruno.txt	/*:BrunoClearTokens*
+:BrunoClearVars	bruno.txt	/*:BrunoClearVars*
 :BrunoClose	bruno.txt	/*:BrunoClose*
 :BrunoCopy	bruno.txt	/*:BrunoCopy*
 :BrunoCopyCurl	bruno.txt	/*:BrunoCopyCurl*
@@ -15,6 +16,7 @@
 :BrunoReplay	bruno.txt	/*:BrunoReplay*
 :BrunoRequests	bruno.txt	/*:BrunoRequests*
 :BrunoRun	bruno.txt	/*:BrunoRun*
+:BrunoRuntimeVars	bruno.txt	/*:BrunoRuntimeVars*
 :BrunoSearch	bruno.txt	/*:BrunoSearch*
 :BrunoTab	bruno.txt	/*:BrunoTab*
 :BrunoToggle	bruno.txt	/*:BrunoToggle*

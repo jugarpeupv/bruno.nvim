@@ -73,6 +73,9 @@ function M.build_command(request, env, extra_args)
     table.insert(command, env)
   end
 
+  local session = require('bruno.session_vars')
+  vim.list_extend(command, session.args(request, env))
+
   for _, arg in ipairs(config.cli_args or {}) do
     table.insert(command, arg)
   end
@@ -130,6 +133,8 @@ local function execute(request, staged_path, opts, env)
     table.insert(command, '--env')
     table.insert(command, env)
   end
+  local session = require('bruno.session_vars')
+  vim.list_extend(command, session.args(request, env))
   for _, arg in ipairs(config.cli_args or {}) do
     table.insert(command, arg)
   end
@@ -171,6 +176,7 @@ local function execute(request, staged_path, opts, env)
     end
 
     state.set_result(result)
+    require('bruno.session_vars').remember(request, env, result)
     ui.show_result(result)
     if not opts.silent then
       log.info(M.summary_message(result.results, result.summary))

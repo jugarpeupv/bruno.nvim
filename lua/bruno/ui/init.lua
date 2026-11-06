@@ -1457,6 +1457,39 @@ function M.yank_raw()
   log.notify('Bruno: raw result copied', 'info')
 end
 
+---Open the Request tab focused on the captured runtime variables.
+function M.show_runtime_vars()
+  local request = default_request()
+  if not request then
+    log.notify('Bruno: no request selected', 'warn')
+    return
+  end
+
+  local session = require('bruno.session_vars')
+  local env = env_for(request)
+  if next(session.get(request.root, env)) == nil then
+    log.notify('Bruno: no runtime variables captured for this collection yet', 'info')
+    return
+  end
+
+  local bufnr = M.open({ request = request, preserve_result = true })
+  if not valid_buf(bufnr) then
+    return
+  end
+  M.select_tab('request')
+
+  local row
+  for index, line in ipairs(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)) do
+    if line:match('^##%s+RUNTIME VARS') then
+      row = index
+    end
+  end
+  if row and valid_win(M.win) then
+    local target = math.min(row + 1, vim.api.nvim_buf_line_count(bufnr))
+    pcall(vim.api.nvim_win_set_cursor, M.win, { target, 0 })
+  end
+end
+
 ---Show the workbench keymap help.
 function M.help()
   local config = require('bruno.config').get()

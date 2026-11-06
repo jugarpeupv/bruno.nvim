@@ -1,5 +1,6 @@
 local Json = require('bruno.utils.json')
 local parsers = require('bruno.parsers')
+local session_vars = require('bruno.session_vars')
 
 local M = {}
 
@@ -203,14 +204,39 @@ function M.request_tab(request, env, running, error, result)
   section(lines, 'HEADERS')
   local sent = request_of(result and result.results[1] or nil)
   local sent_headers = sent and sorted_headers(sent.headers) or {}
+  local auth_value = nil
+  if auth and auth.mode == 'bearer' and type(auth.config) == 'table' and type(auth.config.token) == 'string' then
+    auth_value = 'Bearer ' .. auth.config.token
+  end
+
+  local has_authorization = false
+  for _, entry in ipairs(request.headers or {}) do
+    if entry.name:lower() == 'authorization' then
+      has_authorization = true
+    end
+  end
+
   if #sent_headers > 0 then
     for _, header in ipairs(sent_headers) do
-      lines[#lines + 1] = '  ' .. header.name .. ': ' .. header.value
+      local value = header.value
+      if header.name:lower() == 'authorization' then
+        has_authorization = true
+        -- The CLI redacts secrets in its JSON output; show the configured
+        -- template instead so `{{VARIABLE}}` stays usable (and hoverable).
+        if auth_value and value:find('*', 1, true) then
+          value = auth_value
+        end
+      end
+      lines[#lines + 1] = '  ' .. header.name .. ': ' .. value
     end
   else
     for _, line in ipairs(key_value_lines(request.headers, ': ')) do
       lines[#lines + 1] = line
     end
+  end
+
+  if not has_authorization and auth_value then
+    lines[#lines + 1] = '  Authorization: ' .. auth_value
   end
 
   local body = request.body or { mode = 'none' }
@@ -238,6 +264,17 @@ function M.request_tab(request, env, running, error, result)
     end
     for _, entry in ipairs(request.vars.res or {}) do
       lines[#lines + 1] = '  → ' .. entry.name .. ' = ' .. entry.value
+    end
+  end
+
+  local session = require('bruno.session_vars')
+  local runtime = session.get(request.root, env)
+  local runtime_names = vim.tbl_keys(runtime)
+  if #runtime_names > 0 then
+    table.sort(runtime_names)
+    section(lines, 'RUNTIME VARS')
+    for _, name in ipairs(runtime_names) do
+      lines[#lines + 1] = '  ' .. name .. ' = ' .. session.display_value(name, runtime[name])
     end
   end
 
@@ -476,93 +513,6 @@ local function sorted_var_names(vars)
   return names
 end
 
----@param value any
----@return string
-local function var_value_string(value)
-  if value == nil or value == vim.NIL then
-    return ''
-  end
-  if type(value) == 'table' then
-    return Json.pretty(value)
-  end
-  return tostring(value)
-end
-
----Evaluate the right-hand side of a `bru.setVar(...)` / `bru.setEnvVar(...)`
----against the response. Supports `res.getStatus()` and dotted
----`res.getBody().field` access, plus string/number/boolean literals.
----@param expr string
----@param response table
----@return any
-local function eval_script_expression(expr, response)
-  expr = vim.trim(expr)
-
-  local str = expr:match('^"(.*)"$') or expr:match("^'(.*)'$")
-  if str ~= nil then
-    return str
-  end
-  if expr == 'true' then
-    return true
-  end
-  if expr == 'false' then
-    return false
-  end
-  if expr == 'null' or expr == 'undefined' then
-    return nil
-  end
-  local num = tonumber(expr)
-  if num ~= nil then
-    return num
-  end
-
-  if expr:match('^res%.getStatus%(%s*%)$') then
-    return response.status
-  end
-  if expr:match('^res%.getBody%(%s*%)$') then
-    return response.data
-  end
-
-  local chain = expr:match('^res%.getBody%(%s*%)%.(.+)$')
-  if chain then
-    local value = response.data
-    for part in chain:gmatch('[^%.]+') do
-      if type(value) ~= 'table' then
-        value = nil
-        break
-      end
-      value = value[part]
-    end
-    return value
-  end
-
-  return nil
-end
-
----Parse `bru.setVar("name", value)` and `bru.setEnvVar("name", value)` from a
----script and resolve the values against the response.
----@param script string?
----@param response table
----@return table<string, string>
-local function extract_script_vars(script, response)
-  local result = {}
-  if type(script) ~= 'string' or script == '' then
-    return result
-  end
-
-  for line in script:gmatch('[^\r\n]+') do
-    local name, expr = line:match('bru%.set%w+%(%s*["\']([^"\']+)["\']%s*,%s*(.+)$')
-    if name and expr then
-      expr = expr:gsub('%s*;%s*$', ''):gsub('%s*%)%s*$', ''):gsub('^%s+', '')
-      local value = eval_script_expression(expr, response)
-      if value ~= nil then
-        result[name] = var_value_string(value)
-      end
-    end
-  end
-
-  return result
-end
-
 ---@param before table<string, string>?
 ---@param after table<string, string>?
 ---@return string[]
@@ -586,12 +536,12 @@ local function vars_diff_lines(before, after)
     local old_value = before and before[name]
     local new_value = after and after[name]
     if old_value == nil and new_value ~= nil then
-      lines[#lines + 1] = string.format('+ %s = %s', name, var_value_string(new_value))
+      lines[#lines + 1] = string.format('+ %s = %s', name, session_vars.value_string(new_value))
     elseif new_value == nil and old_value ~= nil then
       lines[#lines + 1] = string.format('- %s', name)
-    elseif var_value_string(old_value) ~= var_value_string(new_value) then
-      lines[#lines + 1] = string.format('- %s = %s', name, var_value_string(old_value))
-      lines[#lines + 1] = string.format('+ %s = %s', name, var_value_string(new_value))
+    elseif session_vars.value_string(old_value) ~= session_vars.value_string(new_value) then
+      lines[#lines + 1] = string.format('- %s = %s', name, session_vars.value_string(old_value))
+      lines[#lines + 1] = string.format('+ %s = %s', name, session_vars.value_string(new_value))
     end
   end
   if #lines == 0 then
@@ -698,7 +648,7 @@ function M.scripts_tab(request, result, running, error)
 
   local first = result.results[1]
   local response = first and response_of(first) or {}
-  local script_vars = extract_script_vars(request.script and request.script.post, response)
+  local script_vars = session_vars.extract(request.script and request.script.post, response)
 
   local after_vars = {}
   for name, value in pairs(result.vars_after or {}) do

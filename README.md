@@ -117,9 +117,9 @@ require('bruno').setup({
       replay = 'R',
       edit_source = 'ge',
       env = 'gE',
-      requests = 'p',
-      auth = 'a',
-      auth_clear = 'A',
+      requests = 'gp',
+      auth = 'ga',
+      auth_clear = 'gA',
       copy_curl = 'C',
       yank_body = 'cb',
       yank_raw = 'cr',
@@ -494,7 +494,7 @@ bruno.toggle()              -- focus/close/open the workbench
 bruno.next_response()       -- next execution in the workbench history
 bruno.prev_response()       -- previous execution in the workbench history
 bruno.env('Local')
-bruno.pick_request()
+bruno.pick_request()        -- picks and runs a request
 bruno.auth()                -- acquire/login OAuth2
 bruno.auth_clear()
 bruno.copy_curl()

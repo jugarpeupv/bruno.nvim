@@ -1132,6 +1132,7 @@ function M.pick_request()
     end
     state.set_request(request)
     M.open({ request = request })
+    require('bruno.runner').run(request)
   end)
 end
 
@@ -1240,7 +1241,7 @@ function M.help()
     string.format('  %-8s %s', keymaps.replay or '—', 'replay last request'),
     string.format('  %-8s %s', keymaps.edit_source or '—', 'edit request source'),
     string.format('  %-8s %s', keymaps.env or '—', 'select environment'),
-    string.format('  %-8s %s', keymaps.requests or '—', 'pick a request'),
+    string.format('  %-8s %s', keymaps.requests or '—', 'pick and run a request'),
     '',
     string.format('  %-8s %s', keymaps.auth or '—', 'acquire OAuth2 token'),
     string.format('  %-8s %s', keymaps.auth_clear or '—', 'clear OAuth2 token'),

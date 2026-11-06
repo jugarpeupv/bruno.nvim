@@ -60,8 +60,8 @@ Configuration defaults: >lua
         tab_4 = '4', tab_5 = '5', tab_6 = '6',
         tab_7 = '7', tab_8 = '8',
         replay = 'R', edit_source = 'ge',
-        env = 'gE', requests = 'p',
-        auth = 'a', auth_clear = 'A',
+        env = 'gE', requests = 'gp',
+        auth = 'ga', auth_clear = 'gA',
         copy_curl = 'C', yank_body = 'cb', yank_raw = 'cr',
         help = '?', close = 'q', hover = 'K', select_tab = '<CR>',
       },
@@ -243,9 +243,9 @@ Default buffer-local keymaps: >text
   R                 replay last request
   ge                edit request source
   gE                select environment
-  p                 pick request
-  a                 acquire OAuth2 token
-  A                 clear OAuth2 token
+  gp                pick and run a request
+  ga                acquire OAuth2 token
+  gA                clear OAuth2 token
   C                 copy as cURL
   cb                yank response body
   cr                yank raw result
@@ -354,7 +354,7 @@ Examples:
   bruno.next_response()
   bruno.prev_response()
   bruno.env('Local')
-  bruno.pick_request()
+  bruno.pick_request()           -- picks and runs a request
   bruno.auth()
   bruno.auth_clear()
   bruno.auth_status()

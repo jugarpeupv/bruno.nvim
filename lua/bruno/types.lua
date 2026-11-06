@@ -218,6 +218,12 @@
 ---@field copy_curl string|false
 ---@field yank_body string|false
 ---@field yank_raw string|false
+---@field jq_filter string|false
+---@field jq_clear string|false
+---@field body_original string|false
+---@field body_binary string|false
+---@field body_hex string|false
+---@field body_image string|false
 ---@field help string|false
 ---@field close string|false
 ---@field hover string|false
@@ -248,6 +254,9 @@
 ---@field tab string
 ---@field running boolean
 ---@field error? string
+---@field body_view? 'text'|'binary'|'hex'|'image'
+---@field jq? string
+---@field raw_jq? string
 
 ---@class bruno.PickerItem
 ---@field label string

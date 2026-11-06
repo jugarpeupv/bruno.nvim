@@ -1,0 +1,38 @@
+info:
+  name: Get Slideshow
+  type: http
+  seq: 2
+http:
+  method: GET
+  url: https://httpbin.org/json
+  headers:
+    - name: Accept
+      value: application/json
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const body = res.getBody() || {};
+        const slides = (body.slideshow && body.slideshow.slides) || [];
+
+        bru.setVar('AUTHOR', (body.slideshow || {}).author);
+        bru.setVar('SLIDE_COUNT', slides.length);
+
+        console.log('author:', (body.slideshow || {}).author, 'slides:', slides.length);
+    - type: tests
+      code: |-
+        test('responds with 200 OK', function() {
+          expect(res.getStatus()).to.equal(200);
+        });
+
+        test('has a slideshow', function() {
+          expect(res.getBody().slideshow).to.be.an('object');
+        });
+docs:
+  content: |
+    Nested JSON (objects and arrays) for trying jq:
+
+        .slideshow.author
+        .slideshow.slides[].title
+        .slideshow.slides | length
+        {author: .slideshow.author, titles: [.slideshow.slides[].title]}

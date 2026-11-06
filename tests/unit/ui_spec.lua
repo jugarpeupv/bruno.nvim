@@ -248,6 +248,9 @@ describe('ui.workbench', function()
     eq('request', ui.state(bufnr).tab)
 
     truthy(vim.fn.maparg('ge', 'n', false, true).callback, 'ge environment mapping is missing')
+    for _, lhs in ipairs({ 'gq', 'gx', 'go', 'gb', 'gh', 'gi' }) do
+      truthy(vim.fn.maparg(lhs, 'n', false, true).callback, lhs .. ' body mapping is missing')
+    end
 
     ui.destroy()
   end)
@@ -667,6 +670,281 @@ describe('ui.workbench', function()
     falsy(hover.is_open())
 
     vim.api.nvim_set_current_win(ui.win)
+    ui.destroy()
+  end)
+
+  it('keeps the cursor in the body after rendering the image view', function()
+    require('bruno').setup({
+      notify = false,
+      default_env = nil,
+      ui = { auto_open = false },
+    })
+    require('bruno.state').reset()
+    require('bruno.env').reset()
+    require('bruno.history').reset()
+
+    local request = parsers.parse_request(root .. '/bru-collection/requests/simple.bru')
+    local ui = require('bruno.ui')
+    local bufnr = ui.open({ request = request })
+    truthy(bufnr)
+
+    ui.show_result({
+      request = request,
+      raw = '{}',
+      data = {},
+      results = {
+        {
+          name = 'Simple Request',
+          status = 'pass',
+          request = { method = 'POST', url = 'http://127.0.0.1:8765/users', headers = {} },
+          response = {
+            status = 200,
+            statusText = 'OK',
+            headers = { ['content-type'] = 'application/json' },
+            data = { a = 1, b = 2, c = 3, d = 4, e = 5 },
+            responseTime = 1,
+            size = 2,
+          },
+          testResults = {},
+          assertionResults = {},
+        },
+      },
+      summary = {},
+      stdout = '',
+      stderr = '',
+      code = 0,
+      env = 'Local',
+    })
+
+    local body_row
+    for index, line in ipairs(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)) do
+      if line:match('^## BODY') then
+        body_row = index
+      end
+    end
+    truthy(body_row, 'BODY section is missing')
+
+    vim.api.nvim_set_current_win(ui.win)
+    vim.api.nvim_win_set_cursor(ui.win, { body_row + 3, 0 })
+
+    -- Pretend this is an image so the image view actually shrinks the buffer.
+    local body_util = require('bruno.ui.body')
+    local original_is_image = body_util.is_image
+    local original_is_json = body_util.is_json
+    local original_render = body_util.render
+    body_util.is_image = function()
+      return true
+    end
+    body_util.is_json = function()
+      return false
+    end
+    body_util.render = function()
+      return true, nil
+    end
+
+    ui.set_body_view('image')
+
+    body_util.is_image = original_is_image
+    body_util.is_json = original_is_json
+    body_util.render = original_render
+
+    eq(body_row + 1, vim.api.nvim_win_get_cursor(ui.win)[1])
+
+    ui.destroy()
+  end)
+
+  it('warns instead of rendering a JSON body as an image', function()
+    require('bruno').setup({
+      notify = false,
+      default_env = nil,
+      ui = { auto_open = false },
+    })
+    require('bruno.state').reset()
+    require('bruno.env').reset()
+    require('bruno.history').reset()
+
+    local request = parsers.parse_request(root .. '/bru-collection/requests/simple.bru')
+    local ui = require('bruno.ui')
+    local bufnr = ui.open({ request = request })
+    truthy(bufnr)
+
+    ui.show_result({
+      request = request,
+      raw = '{}',
+      data = {},
+      results = {
+        {
+          name = 'Simple Request',
+          status = 'pass',
+          request = { method = 'POST', url = 'http://127.0.0.1:8765/users', headers = {} },
+          response = {
+            status = 200,
+            statusText = 'OK',
+            headers = { ['content-type'] = 'application/json' },
+            data = { a = 1 },
+            responseTime = 1,
+            size = 2,
+          },
+          testResults = {},
+          assertionResults = {},
+        },
+      },
+      summary = {},
+      stdout = '',
+      stderr = '',
+      code = 0,
+      env = 'Local',
+    })
+
+    eq('text', ui.state(bufnr).body_view)
+    ui.set_body_view('image')
+    eq('text', ui.state(bufnr).body_view)
+
+    ui.destroy()
+  end)
+
+  it('applies and clears a jq query on the raw tab', function()
+    require('bruno').setup({
+      notify = false,
+      default_env = nil,
+      ui = { auto_open = false },
+    })
+    require('bruno.state').reset()
+    require('bruno.env').reset()
+    require('bruno.history').reset()
+
+    local request = parsers.parse_request(root .. '/bru-collection/requests/simple.bru')
+    local ui = require('bruno.ui')
+    local bufnr = ui.open({ request = request })
+    truthy(bufnr)
+
+    ui.show_result({
+      request = request,
+      raw = '{"results":[{"value":42}]}',
+      data = {},
+      results = {
+        {
+          name = 'Simple Request',
+          status = 'pass',
+          request = { method = 'POST', url = 'http://127.0.0.1:8765/users', headers = {} },
+          response = { status = 200, statusText = 'OK', headers = {}, data = {}, responseTime = 1, size = 2 },
+          testResults = {},
+          assertionResults = {},
+        },
+      },
+      summary = {},
+      stdout = '',
+      stderr = '',
+      code = 0,
+      env = 'Local',
+    })
+
+    ui.select_tab('raw')
+
+    local original_input = vim.ui.input
+    vim.ui.input = function(_, callback)
+      callback('.results[0].value')
+    end
+    ui.filter_jq()
+    vim.ui.input = original_input
+
+    eq('.results[0].value', ui.state(bufnr).raw_jq)
+    local text = table.concat(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false), '\n')
+    match(text, 'jq: %.results%[0%]%.value')
+    match(text, '42')
+
+    ui.clear_jq()
+    eq(nil, ui.state(bufnr).raw_jq)
+
+    ui.destroy()
+  end)
+
+  it('applies and clears a jq query from the response body picker', function()
+    require('bruno').setup({
+      notify = false,
+      default_env = nil,
+      ui = { auto_open = false },
+    })
+    require('bruno.state').reset()
+    require('bruno.env').reset()
+    require('bruno.history').reset()
+
+    local request = parsers.parse_request(root .. '/bru-collection/requests/simple.bru')
+    local ui = require('bruno.ui')
+    local bufnr = ui.open({ request = request })
+    truthy(bufnr)
+
+    ui.show_result({
+      request = request,
+      raw = '{}',
+      data = {},
+      results = {
+        {
+          name = 'Simple Request',
+          status = 'pass',
+          request = { method = 'POST', url = 'http://127.0.0.1:8765/users', headers = {} },
+          response = {
+            status = 200,
+            statusText = 'OK',
+            headers = { ['content-type'] = 'application/json' },
+            data = { a = 1, b = 2 },
+            responseTime = 1,
+            size = 2,
+          },
+          testResults = {},
+          assertionResults = {},
+        },
+      },
+      summary = {},
+      stdout = '',
+      stderr = '',
+      code = 0,
+      env = 'Local',
+    })
+
+    local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+    local body_row
+    for index, line in ipairs(lines) do
+      if line:match('^## BODY') then
+        body_row = index
+      end
+    end
+    truthy(body_row, 'BODY section is missing')
+
+    vim.api.nvim_set_current_win(ui.win)
+    vim.api.nvim_win_set_cursor(ui.win, { body_row, 0 })
+
+    local original_select = vim.ui.select
+    local original_input = vim.ui.input
+    vim.ui.select = function(items, _, callback)
+      local choice
+      for _, item in ipairs(items) do
+        if item == 'Filter with jq' then
+          choice = item
+        end
+      end
+      truthy(choice, 'jq action is missing from the picker')
+      callback(choice)
+    end
+    vim.ui.input = function(_, callback)
+      callback('.a')
+    end
+
+    local mapping = vim.fn.maparg('<CR>', 'n', false, true)
+    truthy(mapping.callback, '<CR> mapping is missing')
+    mapping.callback()
+
+    vim.ui.select = original_select
+    vim.ui.input = original_input
+
+    eq('.a', ui.state(bufnr).jq)
+    local text = table.concat(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false), '\n')
+    match(text, 'jq:')
+    match(text, '%.a')
+
+    ui.clear_jq()
+    eq(nil, ui.state(bufnr).jq)
+
     ui.destroy()
   end)
 end)

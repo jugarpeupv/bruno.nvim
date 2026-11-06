@@ -60,6 +60,9 @@ function M.state(bufnr)
       tab = valid_tab_name(config, config.ui.default_tab),
       running = false,
       error = nil,
+      body_view = 'text',
+      jq = nil,
+      raw_jq = nil,
     }
   return states[bufnr]
 end
@@ -297,13 +300,16 @@ local function build_content(bufnr, env)
   if ui_state.tab == 'request' then
     return tabs.request_tab(request, env, ui_state.running, ui_state.error, ui_state.result)
   elseif ui_state.tab == 'response' then
-    return tabs.response_tab(ui_state.result, ui_state.running, ui_state.error)
+    return tabs.response_tab(ui_state.result, ui_state.running, ui_state.error, {
+      view = ui_state.body_view,
+      jq = ui_state.jq,
+    })
   elseif ui_state.tab == 'tests' then
     return tabs.tests_tab(request, ui_state.result, ui_state.running, ui_state.error)
   elseif ui_state.tab == 'scripts' then
     return tabs.scripts_tab(request, ui_state.result, ui_state.running, ui_state.error)
   elseif ui_state.tab == 'raw' then
-    return tabs.raw_tab(ui_state.result, ui_state.running, ui_state.error)
+    return tabs.raw_tab(ui_state.result, ui_state.running, ui_state.error, { jq = ui_state.raw_jq })
   elseif ui_state.tab == 'verbose' then
     local command = ui_state.result and ui_state.result.command or state.last_command
     return tabs.verbose_tab(ui_state.result, ui_state.running, ui_state.error, command)
@@ -538,6 +544,18 @@ function M.render(bufnr, opts)
     end
     vim.wo[win].winbar = ''
   end
+
+  local body_util = require('bruno.ui.body')
+  if ui_state.tab == 'response' and ui_state.body_view == 'image' and ui_state.result and valid_win(win) then
+    local rendered, err = body_util.render(bufnr, win, ui_state)
+    if not rendered then
+      ui_state.body_view = 'text'
+      log.notify('Bruno: ' .. tostring(err or 'could not render the image'), 'warn')
+      pcall(M.render, bufnr)
+    end
+  else
+    body_util.clear(bufnr)
+  end
 end
 
 ---@param split string
@@ -650,6 +668,24 @@ local function bind_keymaps(bufnr)
   map('yank_raw', function()
     M.yank_raw()
   end, 'Bruno: yank raw result')
+  map('jq_filter', function()
+    M.filter_jq()
+  end, 'Bruno: filter response body with jq')
+  map('jq_clear', function()
+    M.clear_jq()
+  end, 'Bruno: clear jq query')
+  map('body_original', function()
+    M.set_body_view('text')
+  end, 'Bruno: render original response body')
+  map('body_binary', function()
+    M.set_body_view('binary')
+  end, 'Bruno: render response body as binary')
+  map('body_hex', function()
+    M.set_body_view('hex')
+  end, 'Bruno: render response body as hex')
+  map('body_image', function()
+    M.set_body_view('image')
+  end, 'Bruno: render response image inline')
   map('help', function()
     M.help()
   end, 'Bruno: show help')
@@ -667,6 +703,12 @@ local function bind_keymaps(bufnr)
   local select_tab_lhs = keymaps.select_tab
   if select_tab_lhs and select_tab_lhs ~= false then
     vim.keymap.set('n', select_tab_lhs, function()
+      local ui_state = M.state(bufnr)
+      if ui_state.tab == 'response' and M.cursor_in_body(bufnr) then
+        M.body_actions()
+        return
+      end
+
       local name = M.tab_at_cursor(bufnr)
       if name then
         M.select_tab(name)
@@ -697,6 +739,8 @@ local function apply_history_entry(ui_state, entry)
   ui_state.result = entry.result
   ui_state.error = entry.error
   ui_state.running = false
+  ui_state.jq = nil
+  ui_state.raw_jq = nil
 end
 
 ---@param opts? { request?: bruno.Request, preserve_result?: boolean, focus?: boolean }
@@ -875,6 +919,188 @@ function M.show_error(error)
 end
 
 ---@param bufnr integer
+---@return table? response
+local function current_response(bufnr)
+  local ui_state = M.state(bufnr)
+  local first = ui_state.result and ui_state.result.results and ui_state.result.results[1]
+  return first and first.response or nil
+end
+
+---True when the cursor is inside the `## BODY` section of the workbench.
+---@param bufnr integer
+---@return boolean
+function M.cursor_in_body(bufnr)
+  local win = vim.api.nvim_get_current_win()
+  if not valid_buf(bufnr) or vim.api.nvim_win_get_buf(win) ~= bufnr then
+    return false
+  end
+  local cursor = vim.api.nvim_win_get_cursor(win)
+  local body_row
+  for index, line in ipairs(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)) do
+    if line:match('^## BODY') then
+      body_row = index
+    end
+  end
+  return body_row ~= nil and cursor[1] >= body_row
+end
+
+---Open the response body action picker (`<CR>` inside the body).
+function M.body_actions()
+  local bufnr = M.buf
+  if not valid_buf(bufnr) then
+    return
+  end
+  local ui_state = M.state(bufnr)
+  local response = current_response(bufnr)
+  if not response then
+    log.notify('Bruno: no response body to act on', 'warn')
+    return
+  end
+
+  local body_util = require('bruno.ui.body')
+  local items = { 'Render original', 'Render binary', 'Render hex' }
+  if body_util.is_image(response) then
+    items[#items + 1] = 'Render image inline'
+  end
+  if body_util.is_json(response) then
+    items[#items + 1] = 'Filter with jq'
+  end
+  if ui_state.jq and ui_state.jq ~= '' then
+    items[#items + 1] = 'Remove jq query'
+  end
+
+  vim.ui.select(items, { prompt = 'Bruno response body' }, function(choice)
+    if not choice then
+      return
+    end
+    if choice == 'Render original' then
+      M.set_body_view('text')
+    elseif choice == 'Render image inline' then
+      M.set_body_view('image')
+    elseif choice == 'Render binary' then
+      M.set_body_view('binary')
+    elseif choice == 'Render hex' then
+      M.set_body_view('hex')
+    elseif choice == 'Filter with jq' then
+      M.filter_jq()
+    elseif choice == 'Remove jq query' then
+      M.clear_jq()
+    end
+  end)
+end
+
+---Move the cursor to the first line below the `## BODY` heading.
+---@param bufnr integer
+local function focus_body_start(bufnr)
+  local win = M.win
+  if not valid_buf(bufnr) or not valid_win(win) then
+    return
+  end
+  local body_row
+  for index, line in ipairs(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)) do
+    if line:match('^## BODY') then
+      body_row = index
+    end
+  end
+  if not body_row then
+    return
+  end
+  local target = math.min(body_row + 1, vim.api.nvim_buf_line_count(bufnr))
+  pcall(vim.api.nvim_win_set_cursor, win, { target, 0 })
+end
+
+---Switch how the response body is rendered.
+---@param view 'text'|'binary'|'hex'|'image'
+function M.set_body_view(view)
+  local bufnr = M.buf
+  if not valid_buf(bufnr) then
+    return
+  end
+  local response = current_response(bufnr)
+  if not response then
+    log.notify('Bruno: no response body to act on', 'warn')
+    return
+  end
+  if view == 'image' then
+    local body_util = require('bruno.ui.body')
+    if body_util.is_json(response) then
+      log.notify('Bruno: body is JSON, cannot render as image', 'warn')
+      return
+    end
+    if not body_util.is_image(response) then
+      log.notify('Bruno: body is not an image', 'warn')
+      return
+    end
+  end
+  M.state(bufnr).body_view = view
+  M.render(bufnr)
+  focus_body_start(bufnr)
+end
+
+---Prompt for a jq query and apply it to the response body (`gq`) or the raw
+---CLI JSON when the Raw tab is active.
+function M.filter_jq()
+  local bufnr = M.buf
+  if not valid_buf(bufnr) then
+    return
+  end
+  local ui_state = M.state(bufnr)
+  local is_raw = ui_state.tab == 'raw'
+  if is_raw then
+    if not ui_state.result or ui_state.result.raw == '' then
+      log.notify('Bruno: no raw output to filter', 'warn')
+      return
+    end
+  elseif not current_response(bufnr) then
+    log.notify('Bruno: no response body to act on', 'warn')
+    return
+  end
+
+  local current = is_raw and ui_state.raw_jq or ui_state.jq
+  vim.ui.input({ prompt = 'jq query: ', default = current or '.' }, function(input)
+    if input == nil then
+      return
+    end
+    input = vim.trim(input)
+    if is_raw then
+      ui_state.raw_jq = input ~= '' and input or nil
+    else
+      ui_state.jq = input ~= '' and input or nil
+      ui_state.body_view = 'text'
+    end
+    M.render(bufnr)
+    if not is_raw then
+      focus_body_start(bufnr)
+    end
+  end)
+end
+
+---Clear the applied jq query (`gx`): the raw query on the Raw tab, otherwise
+---the response body query.
+function M.clear_jq()
+  local bufnr = M.buf
+  if not valid_buf(bufnr) then
+    return
+  end
+  local ui_state = M.state(bufnr)
+  local is_raw = ui_state.tab == 'raw'
+  local query = is_raw and ui_state.raw_jq or ui_state.jq
+  if not query or query == '' then
+    log.info('Bruno: no jq query to clear')
+    return
+  end
+  if is_raw then
+    ui_state.raw_jq = nil
+  else
+    ui_state.jq = nil
+  end
+  M.render(bufnr)
+  if not is_raw then
+    focus_body_start(bufnr)
+  end
+end
+
+---@param bufnr integer
 ---@return string? name
 function M.tab_at_cursor(bufnr)
   local win = vim.api.nvim_get_current_win()
@@ -998,6 +1224,9 @@ end
 ---Close the workbench window without deleting its buffer.
 function M.close()
   require('bruno.ui.hover').close()
+  if valid_buf(M.buf) then
+    require('bruno.ui.body').clear(M.buf)
+  end
   local win = find_workbench_window()
   if win then
     pcall(vim.api.nvim_win_close, win, true)
@@ -1009,6 +1238,7 @@ end
 function M.destroy()
   M.close()
   if valid_buf(M.buf) then
+    require('bruno.ui.body').cleanup(M.buf)
     pcall(vim.api.nvim_buf_delete, M.buf, { force = true })
   end
   M.buf = nil
@@ -1239,6 +1469,7 @@ function M.help()
     string.format('  %-8s %s', keymaps.next_response or '—', 'next execution in history'),
     string.format('  %-8s %s', keymaps.prev_response or '—', 'previous execution in history'),
     string.format('  %-8s %s', keymaps.select_tab or '—', 'open tab under cursor'),
+    string.format('  %-8s %s', keymaps.select_tab or '—', 'body actions (in Response BODY)'),
     string.format('  %-8s %s', '1..' .. #config.ui.tabs, 'select tab directly'),
     '',
     string.format('  %-8s %s', keymaps.replay or '—', 'replay last request'),
@@ -1251,6 +1482,12 @@ function M.help()
     string.format('  %-8s %s', keymaps.copy_curl or '—', 'copy as cURL'),
     string.format('  %-8s %s', keymaps.yank_body or '—', 'yank response body'),
     string.format('  %-8s %s', keymaps.yank_raw or '—', 'yank raw result'),
+    string.format('  %-8s %s', keymaps.body_original or '—', 'render original body'),
+    string.format('  %-8s %s', keymaps.body_binary or '—', 'render body as binary'),
+    string.format('  %-8s %s', keymaps.body_hex or '—', 'render body as hex'),
+    string.format('  %-8s %s', keymaps.body_image or '—', 'render body image inline'),
+    string.format('  %-8s %s', keymaps.jq_filter or '—', 'filter body with jq'),
+    string.format('  %-8s %s', keymaps.jq_clear or '—', 'clear jq query'),
     string.format('  %-8s %s', keymaps.hover or '—', 'inspect {{variable}} under cursor'),
     '',
     string.format('  %-8s %s', keymaps.help or '—', 'show this help'),

@@ -103,22 +103,6 @@ local function request_of(result)
   return result.request
 end
 
----@param value any
----@return string
-local function body_to_string(value)
-  if value == nil or value == vim.NIL then
-    return ''
-  end
-  if type(value) == 'table' then
-    return Json.pretty(value)
-  end
-  local text = tostring(value)
-  if Json.looks_like_json(text) then
-    return Json.pretty_string(text)
-  end
-  return text
-end
-
 ---@param entries bruno.KeyValue[]
 ---@param separator string
 ---@return string[]
@@ -787,9 +771,11 @@ end
 ---@param result? bruno.RunResult
 ---@param running boolean
 ---@param error? string
+---@param opts? { view?: 'text'|'binary'|'hex'|'image', jq?: string }
 ---@return string[]
-function M.response_tab(result, running, error)
+function M.response_tab(result, running, error, opts)
   local lines = {}
+  opts = opts or {}
 
   if running then
     return { 'Waiting for the response…' }
@@ -808,11 +794,22 @@ function M.response_tab(result, running, error)
     return { 'The Bruno CLI did not return any result.' }
   end
 
+  local body_util = require('bruno.ui.body')
   local response = response_of(first) or {}
   local status = present(response.status) and response.status or '—'
   local status_text = present(response.statusText) and tostring(response.statusText) or ''
   local status_line = tostring(status) .. (status_text ~= '' and (' ' .. status_text) or '')
-  local body = body_to_string(response.data)
+  local body = body_util.text(response)
+
+  local jq_error
+  if opts.jq and opts.jq ~= '' and body ~= '' then
+    local filtered, err = body_util.jq(body, opts.jq)
+    if filtered then
+      body = filtered
+    else
+      jq_error = err
+    end
+  end
 
   section(lines, #result.results > 1 and ('RESPONSE (1 of ' .. #result.results .. ')') or 'RESPONSE')
   kv(lines, 'Status', status_line)
@@ -828,9 +825,29 @@ function M.response_tab(result, running, error)
     lines[#lines + 1] = tostring(first.error)
   end
 
+  if jq_error then
+    section(lines, 'JQ ERROR')
+    lines[#lines + 1] = jq_error
+  end
+
   section(lines, 'BODY')
+  local view = opts.view or 'text'
+  if opts.jq and opts.jq ~= '' then
+    lines[#lines + 1] = 'jq: ' .. opts.jq
+    lines[#lines + 1] = ''
+  end
   if body == '' then
     lines[#lines + 1] = '  (empty)'
+  elseif view == 'image' then
+    -- The image is drawn over the body area by image.nvim; no placeholder text.
+  elseif view == 'hex' then
+    lines[#lines + 1] = '```text'
+    vim.list_extend(lines, body_util.hex_lines(body))
+    lines[#lines + 1] = '```'
+  elseif view == 'binary' then
+    lines[#lines + 1] = '```text'
+    vim.list_extend(lines, body_util.binary_lines(body))
+    lines[#lines + 1] = '```'
   else
     local language = body_language(response, body)
     lines[#lines + 1] = '```' .. language
@@ -916,8 +933,10 @@ end
 ---@param result? bruno.RunResult
 ---@param running boolean
 ---@param error? string
+---@param opts? { jq?: string }
 ---@return string[]
-function M.raw_tab(result, running, error)
+function M.raw_tab(result, running, error, opts)
+  opts = opts or {}
   if running then
     return { 'Waiting for raw output…' }
   end
@@ -927,14 +946,33 @@ function M.raw_tab(result, running, error)
   if not result then
     return { 'Run the request to see the raw Bruno CLI output.' }
   end
-  if result.raw == '' then
-    return { '(empty raw output)' }
+
+  local lines = {}
+  if opts.jq and opts.jq ~= '' then
+    lines[#lines + 1] = 'jq: ' .. opts.jq
+    lines[#lines + 1] = ''
   end
 
-  local decoded = Json.decode(result.raw)
+  if result.raw == '' then
+    lines[#lines + 1] = '(empty raw output)'
+    return lines
+  end
+
+  local raw = result.raw
+  if opts.jq and opts.jq ~= '' then
+    local filtered, err = require('bruno.ui.body').jq(raw, opts.jq)
+    if filtered then
+      raw = filtered
+    else
+      lines[#lines + 1] = 'jq error: ' .. tostring(err)
+      lines[#lines + 1] = ''
+    end
+  end
+
+  local decoded = Json.decode(raw)
   local language = decoded == nil and 'text' or 'json'
-  local lines = { '```' .. language }
-  vim.list_extend(lines, vim.split(Json.pretty_string(result.raw), '\n', { plain = true }))
+  lines[#lines + 1] = '```' .. language
+  vim.list_extend(lines, vim.split(Json.pretty_string(raw), '\n', { plain = true }))
   lines[#lines + 1] = '```'
   return lines
 end

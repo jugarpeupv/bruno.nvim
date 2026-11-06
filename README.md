@@ -125,6 +125,12 @@ require('bruno').setup({
       copy_curl = 'C',
       yank_body = 'cb',
       yank_raw = 'cr',
+      jq_filter = 'gq',
+      jq_clear = 'gx',
+      body_original = 'go',
+      body_binary = 'gb',
+      body_hex = 'gh',
+      body_image = 'gi',
       help = '?',
       close = 'q',
       hover = 'K',
@@ -303,6 +309,33 @@ Press `K` with the cursor over a `{{VARIABLE}}` to show its resolved value in a
 floating window. Press `K` again to focus the hover window; `q`, `Esc` or `K`
 inside it closes it.
 
+Press `<CR>` with the cursor in the `BODY` section of the Response tab to open
+the body action picker:
+
+- Always: *Render original*, *Render binary* and *Render hex*.
+- Images: *Render image inline* (image.nvim).
+- JSON: *Filter with jq*, which prompts for a query and shows the filtered body;
+  the applied query appears as `jq:` under the `BODY` heading.
+- When a jq query is applied, *Remove jq query* clears it.
+
+The same actions are available as buffer-local keymaps:
+
+| Key | Action |
+|---|---|
+| `gq` | Filter the body (or raw JSON) with a jq query |
+| `gx` | Remove the applied jq query |
+| `go` | Render the original body |
+| `gb` | Render the body as binary |
+| `gh` | Render the body as hex |
+| `gi` | Render the body image inline |
+
+On the **Raw** tab, `gq` filters the raw CLI JSON with jq and `gx` clears that
+query (it is tracked separately from the Response body query).
+
+Inline images use image.nvim. If the Bruno CLI JSON output did not preserve the
+original binary bytes, the plugin re-downloads the response URL with the same
+request details (including OAuth2 tokens) to recover them.
+
 All keymaps are buffer-local to the workbench and configurable in
 `ui.keymaps`.
 
@@ -310,10 +343,9 @@ All keymaps are buffer-local to the workbench and configurable in
 |---|---|
 | `<Tab>` / `<S-Tab>` | Next / previous tab |
 | `)` / `(` | Next / previous execution in the history |
-| `}` / `{` | Next / previous request in the collection |
 | `<CR>` on the tab bar | Open the tab under the cursor |
+| `<CR>` in Response BODY | Open the body action picker |
 | `1` … `8` | Jump to a tab |
-| `R` | Run the current request |
 | `R` | Replay the last request |
 | `ge` | Edit the request source |
 | `gE` | Pick an environment |
@@ -323,6 +355,12 @@ All keymaps are buffer-local to the workbench and configurable in
 | `C` | Copy as cURL |
 | `cb` | Yank the response body |
 | `cr` | Yank the raw result |
+| `gq` | Filter the body (or raw JSON) with a jq query |
+| `gx` | Clear the applied jq query (body or raw) |
+| `go` | Render the original body |
+| `gb` | Render the body as binary |
+| `gh` | Render the body as hex |
+| `gi` | Render the image body inline |
 | `K` | Inspect the `{{variable}}` under the cursor |
 | `?` / `g?` | Help |
 | `q` | Close the workbench |

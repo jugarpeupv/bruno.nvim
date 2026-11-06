@@ -1,0 +1,48 @@
+info:
+  name: Get Todo
+  type: http
+  seq: 1
+http:
+  method: GET
+  url: https://jsonplaceholder.typicode.com/todos/1
+  headers:
+    - name: Accept
+      value: application/json
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const body = res.getBody() || {};
+
+        // Runtime variables derived from the JSON body. They appear in the
+        // workbench Scripts tab (ENVIRONMENT VARIABLES diff).
+        bru.setVar('TODO_ID', body.id);
+        bru.setVar('TODO_TITLE', body.title);
+
+        console.log('id:', body.id, 'title:', body.title);
+    - type: tests
+      code: |-
+        test('responds with 200 OK', function() {
+          expect(res.getStatus()).to.equal(200);
+        });
+
+        test('content type is JSON', function() {
+          expect(res.getHeader('content-type')).to.include('application/json');
+        });
+
+        test('has an id', function() {
+          expect(res.getBody().id).to.be.a('number');
+        });
+docs:
+  content: |
+    Public JSON endpoint (no auth) for exercising the Response tab body
+    actions. Press `<CR>` inside the BODY section and choose "Filter with jq";
+    try any of these queries:
+
+        .
+        .title
+        {id, title}
+        keys
+        .completed
+        [.id, .title] | @tsv
+        select(.completed == false) | .title

@@ -63,6 +63,9 @@ Configuration defaults: >lua
         env = 'gE', requests = 'gp',
         auth = 'ga', auth_clear = 'gA',
         copy_curl = 'C', yank_body = 'cb', yank_raw = 'cr',
+        jq_filter = 'gq', jq_clear = 'gx',
+        body_original = 'go', body_binary = 'gb',
+        body_hex = 'gh', body_image = 'gi',
         help = '?', close = 'q', hover = 'K', select_tab = '<CR>',
       },
     },
@@ -231,10 +234,35 @@ Press `K` with the cursor over a `{{VARIABLE}}` to show its resolved value in a
 floating window. Press `K` again to focus the hover window; `q`, `Esc` or `K`
 inside it closes it.
 
+Press `<CR>` with the cursor in the `BODY` section of the Response tab to open
+the body action picker:
+
+  Always    Render original, render binary or render hex.
+  Images    Render image inline (image.nvim).
+  JSON      Filter with jq; the query is shown as `jq:` under BODY.
+  Applied   Remove jq query.
+
+The same actions are available as keymaps:
+
+  gq                filter body or raw JSON with a jq query
+  gx                clear the jq query (body or raw)
+  go                render the original body
+  gb                render the body as binary
+  gh                render the body as hex
+  gi                render the image body inline
+
+On the Raw tab, `gq` filters the raw CLI JSON with jq and `gx` clears it. The
+raw query is tracked separately from the Response body query.
+
+Inline images use image.nvim. When the CLI JSON output did not preserve the
+binary bytes, the response URL is re-downloaded with the same request details
+(including OAuth2 tokens).
+
 Default buffer-local keymaps: >text
   <Tab> / <S-Tab>   next / previous tab
   ) / (             next / previous execution in history
   <CR>              open tab under cursor (on tab bar)
+  <CR> in BODY      response body actions
   1 .. 8            select a tab
   R                 replay last request
   ge                edit request source
@@ -245,6 +273,12 @@ Default buffer-local keymaps: >text
   C                 copy as cURL
   cb                yank response body
   cr                yank raw result
+  gq                filter body or raw JSON with jq
+  gx                clear jq query (body or raw)
+  go                render original body
+  gb                render body as binary
+  gh                render body as hex
+  gi                render image body inline
   K                 inspect {{variable}} under cursor
   ? or g?           help
   q                 close workbench

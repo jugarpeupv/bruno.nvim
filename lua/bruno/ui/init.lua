@@ -796,9 +796,6 @@ function M.open(opts)
   then
     ui_state.error = state.last_error
   end
-  if not opts.preserve_result and ui_state.result and ui_state.tab == 'request' then
-    ui_state.tab = 'response'
-  end
 
   if valid_win(M.win) and vim.api.nvim_win_get_buf(M.win) ~= bufnr then
     M.win = nil

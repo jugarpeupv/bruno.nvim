@@ -152,7 +152,7 @@ local function open_float(source_win, source_buf, lines)
     focusable = true,
     zindex = 60,
   })
-  vim.wo[win].wrap = true
+  vim.wo[win].wrap = false
   vim.wo[win].cursorline = false
 
   active = {

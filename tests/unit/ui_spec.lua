@@ -596,6 +596,53 @@ describe('ui.workbench', function()
     ui.destroy()
   end)
 
+  it('reopens on the last tab after toggling', function()
+    require('bruno').setup({
+      notify = false,
+      default_env = nil,
+      ui = { auto_open = false },
+    })
+    require('bruno.state').reset()
+    require('bruno.env').reset()
+    require('bruno.history').reset()
+
+    local request = parsers.parse_request(root .. '/bru-collection/requests/simple.bru')
+    local ui = require('bruno.ui')
+    local bufnr = ui.open({ request = request })
+    truthy(bufnr)
+
+    ui.show_result({
+      request = request,
+      raw = '{}',
+      data = {},
+      results = {
+        {
+          name = 'Simple Request',
+          status = 'pass',
+          request = { method = 'POST', url = 'http://127.0.0.1:8765/users', headers = {} },
+          response = { status = 200, statusText = 'OK', headers = {}, data = {}, responseTime = 1, size = 2 },
+          testResults = {},
+          assertionResults = {},
+        },
+      },
+      summary = {},
+      stdout = '',
+      stderr = '',
+      code = 0,
+      env = 'Local',
+    })
+
+    ui.select_tab('request')
+    eq('request', ui.state(bufnr).tab)
+
+    ui.close()
+    ui.toggle()
+
+    eq('request', ui.state(ui.buf).tab)
+
+    ui.destroy()
+  end)
+
   it('folds Markdown section headings', function()
     require('bruno').setup({
       notify = false,
